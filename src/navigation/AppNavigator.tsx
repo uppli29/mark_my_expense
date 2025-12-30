@@ -15,21 +15,14 @@ export const AppNavigator: React.FC = () => {
         <Tab.Navigator
             screenOptions={({ route }) => ({
                 headerShown: false,
-                tabBarShowLabel: false,
+                tabBarShowLabel: true,
                 tabBarStyle: {
-                    position: 'absolute',
-                    bottom: 25,
-                    left: 20,
-                    right: 20,
-                    elevation: 5,
-                    backgroundColor: colors.surface,
-                    borderRadius: 25,
-                    height: 60,
                     borderTopWidth: 0,
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.25,
-                    shadowRadius: 3.5,
+                    elevation: 10,
+                    backgroundColor: colors.surface,
+                    height: 80,
+                    paddingTop: 8,
+                    paddingBottom: 12,
                 },
                 tabBarActiveTintColor: colors.primary,
                 tabBarInactiveTintColor: colors.tabBarInactive,
@@ -50,7 +43,7 @@ export const AppNavigator: React.FC = () => {
                             iconName = 'home-outline';
                     }
 
-                    return <Ionicons name={iconName} size={28} color={color} style={{ marginBottom: -3 }} />;
+                    return <Ionicons name={iconName} size={26} color={color} />;
                 },
             })}
         >

@@ -14,6 +14,7 @@ import {
     ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../context/ThemeContext';
 import { CategoryPicker } from './CategoryPicker';
 import { AccountPicker } from './AccountPicker';
@@ -202,34 +203,29 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
 
                         <View style={styles.formSection}>
                             <Text style={[styles.label, { color: colors.textSecondary }]}>Date</Text>
-                            <View style={[styles.dateContainer, { backgroundColor: colors.surfaceVariant, borderColor: colors.border }]}>
-                                <TouchableOpacity
-                                    style={styles.dateArrow}
-                                    onPress={() => adjustDate(-1)}
-                                >
-                                    <Ionicons name="chevron-back" size={24} color={colors.primary} />
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={styles.dateDisplay}
-                                    onPress={() => setShowDatePicker(true)}
-                                >
-                                    <Ionicons name="calendar-outline" size={20} color={colors.primary} />
-                                    <Text style={[styles.dateText, { color: colors.text }]}>
-                                        {formatDate(date)}
-                                    </Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={styles.dateArrow}
-                                    onPress={() => adjustDate(1)}
-                                    disabled={date.toDateString() === new Date().toDateString()}
-                                >
-                                    <Ionicons
-                                        name="chevron-forward"
-                                        size={24}
-                                        color={date.toDateString() === new Date().toDateString() ? colors.textMuted : colors.primary}
-                                    />
-                                </TouchableOpacity>
-                            </View>
+                            <TouchableOpacity
+                                style={[styles.dateInput, { backgroundColor: colors.surfaceVariant, borderColor: colors.border }]}
+                                onPress={() => setShowDatePicker(true)}
+                            >
+                                <Ionicons name="calendar" size={20} color={colors.primary} />
+                                <Text style={[styles.dateText, { color: colors.text }]}>
+                                    {formatDate(date)}
+                                </Text>
+                            </TouchableOpacity>
+                            {showDatePicker && (
+                                <DateTimePicker
+                                    value={date}
+                                    mode="date"
+                                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                                    onChange={(event, selectedDate) => {
+                                        setShowDatePicker(false);
+                                        if (selectedDate) {
+                                            setDate(selectedDate);
+                                        }
+                                    }}
+                                    maximumDate={new Date()}
+                                />
+                            )}
                         </View>
 
                         <View style={styles.formSection}>
@@ -328,26 +324,16 @@ const styles = StyleSheet.create({
         textTransform: 'uppercase',
         letterSpacing: 0.5,
     },
-    dateContainer: {
+    dateInput: {
         flexDirection: 'row',
         alignItems: 'center',
+        padding: 14,
         borderRadius: 12,
         borderWidth: 1,
-        overflow: 'hidden',
-    },
-    dateArrow: {
-        padding: 12,
-    },
-    dateDisplay: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 14,
-        gap: 8,
+        gap: 12,
     },
     dateText: {
-        fontSize: 15,
+        fontSize: 16,
         fontWeight: '500',
     },
     descriptionInput: {
