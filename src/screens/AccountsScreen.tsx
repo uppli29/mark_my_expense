@@ -909,6 +909,7 @@ const styles = StyleSheet.create({
     modalContent: {
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
+        minHeight: '50%', // Ensure modal takes up enough space so inputs are above keyboard
     },
     modalHeader: {
         flexDirection: 'row',

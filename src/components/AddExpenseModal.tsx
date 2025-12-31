@@ -278,10 +278,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 20,
-        paddingTop: 20,
-        paddingBottom: 16,
+        paddingTop: Platform.OS === 'android' ? 50 : 20, // Increased top padding for Android
+        paddingBottom: 20, // Increased bottom padding for easier touch
         borderBottomWidth: 1,
         borderBottomColor: 'rgba(0,0,0,0.1)',
+        minHeight: 80, // Enforce minimum height
     },
     closeButton: {
         padding: 12,
