@@ -11,35 +11,49 @@ import {
     ActivityIndicator,
     SafeAreaView,
     ScrollView,
+    Platform,
+    Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../context/ThemeContext';
 import { ThemeToggle } from '../components/ThemeToggle';
-import { AccountCard } from '../components/AccountCard';
 import { accountRepository } from '../database/repositories/accountRepository';
+import { expenseRepository } from '../database/repositories/expenseRepository';
 import { clearAllData } from '../database/database';
-import { AccountSummary } from '../types';
-import { formatCurrency } from '../utils/dateUtils';
+import { Account } from '../types';
+import { exportToCSV, parseCSV, mapCategoryNameToId } from '../utils/csvUtils';
+import { formatDate } from '../utils/dateUtils';
+import { getBankIcon } from '../utils/bankIcons';
 
 export const AccountsScreen: React.FC = () => {
     const { colors } = useTheme();
     const [loading, setLoading] = useState(true);
-    const [accounts, setAccounts] = useState<AccountSummary[]>([]);
+    const [accounts, setAccounts] = useState<Account[]>([]);
     const [showAddModal, setShowAddModal] = useState(false);
     const [showEraseModal, setShowEraseModal] = useState(false);
+    const [showExportModal, setShowExportModal] = useState(false);
     const [newAccountName, setNewAccountName] = useState('');
     const [accountType, setAccountType] = useState<'bank' | 'card'>('bank');
-    const [totalMonthlySpend, setTotalMonthlySpend] = useState(0);
     const [deleteConfirmText, setDeleteConfirmText] = useState('');
     const [isErasing, setIsErasing] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
+    const [isImporting, setIsImporting] = useState(false);
+
+    // Export date range
+    const [exportStartDate, setExportStartDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+    const [exportEndDate, setExportEndDate] = useState(new Date());
+    const [showStartPicker, setShowStartPicker] = useState(false);
+    const [showEndPicker, setShowEndPicker] = useState(false);
 
     const loadData = useCallback(async () => {
         try {
-            const accountsWithSpend = await accountRepository.getWithMonthlySpend();
-            setAccounts(accountsWithSpend);
-            const total = accountsWithSpend.reduce((sum, acc) => sum + acc.total, 0);
-            setTotalMonthlySpend(total);
+            const accountsList = await accountRepository.getAll();
+            setAccounts(accountsList);
         } catch (error) {
             console.error('Failed to load accounts:', error);
         } finally {
@@ -112,23 +126,193 @@ export const AccountsScreen: React.FC = () => {
         }
     };
 
-    const renderHeader = () => (
-        <View style={[styles.summaryCard, { backgroundColor: colors.primary }]}>
-            <View style={styles.summaryContent}>
-                <Text style={styles.summaryLabel}>Total Monthly Spend</Text>
-                <Text style={styles.summaryAmount}>{formatCurrency(totalMonthlySpend)}</Text>
-                <Text style={styles.summarySubtext}>
-                    Across {accounts.length} account{accounts.length !== 1 ? 's' : ''}
-                </Text>
+    const handleExport = async () => {
+        setIsExporting(true);
+        try {
+            const expenses = await expenseRepository.getByDateRange(exportStartDate, exportEndDate);
+
+            if (expenses.length === 0) {
+                Alert.alert('No Data', 'No expenses found in the selected date range');
+                setIsExporting(false);
+                return;
+            }
+
+            const csvContent = exportToCSV(expenses);
+            const fileName = `expenses_${formatDate(exportStartDate).replace(/\s/g, '_')}_to_${formatDate(exportEndDate).replace(/\s/g, '_')}.csv`;
+            const filePath = `${FileSystem.cacheDirectory}${fileName}`;
+
+            await FileSystem.writeAsStringAsync(filePath, csvContent, {
+                encoding: FileSystem.EncodingType.UTF8,
+            });
+
+            if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(filePath, {
+                    mimeType: 'text/csv',
+                    dialogTitle: 'Export Expenses',
+                });
+            } else {
+                Alert.alert('Success', `Exported ${expenses.length} expenses to ${fileName}`);
+            }
+
+            setShowExportModal(false);
+        } catch (error) {
+            console.error('Export error:', error);
+            Alert.alert('Error', 'Failed to export expenses');
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
+    const handleImport = async () => {
+        setIsImporting(true);
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: 'text/csv',
+                copyToCacheDirectory: true,
+            });
+
+            if (result.canceled) {
+                setIsImporting(false);
+                return;
+            }
+
+            const file = result.assets[0];
+            const content = await FileSystem.readAsStringAsync(file.uri);
+
+            const parsedRows = parseCSV(content);
+
+            // Map accounts and prepare expenses
+            const expensesToCreate: Array<{
+                accountId: number;
+                amount: number;
+                category: string;
+                date: string;
+                description?: string;
+            }> = [];
+
+            const missingAccounts: string[] = [];
+
+            for (const row of parsedRows) {
+                if (row.account === '' || row.account === null) {
+                    console.warn("Account is empty/missing. Skipping row.", row);
+                    continue;
+                }
+                const account = await accountRepository.getByName(row.account);
+                if (!account) {
+                    if (!missingAccounts.includes(row.account)) {
+                        missingAccounts.push(row.account);
+                    }
+                    continue;
+                }
+
+                expensesToCreate.push({
+                    accountId: account.id,
+                    amount: row.amount,
+                    category: mapCategoryNameToId(row.category),
+                    date: row.date,
+                    description: row.description,
+                });
+            }
+
+            if (expensesToCreate.length === 0) {
+                const msg = missingAccounts.length > 0
+                    ? `No expenses imported. Missing accounts: ${missingAccounts.join(', ')}`
+                    : 'No valid expenses found in CSV';
+                Alert.alert('Import Failed', msg);
+                setIsImporting(false);
+                return;
+            }
+
+            const insertedCount = await expenseRepository.bulkCreate(expensesToCreate);
+
+            let successMsg = `Successfully imported ${insertedCount} expenses`;
+            if (missingAccounts.length > 0) {
+                successMsg += `\n\nSkipped rows with missing accounts: ${missingAccounts.join(', ')}`;
+            }
+
+            Alert.alert('Import Complete', successMsg);
+            loadData();
+        } catch (error) {
+            console.error('Import error:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Failed to import expenses';
+            Alert.alert('Import Failed', errorMessage);
+        } finally {
+            setIsImporting(false);
+        }
+    };
+
+    const renderAccountItem = ({ item }: { item: Account }) => {
+        const bankIcon = getBankIcon(item.name);
+
+        return (
+            <View style={[styles.accountCard, { backgroundColor: colors.surface }]}>
+                <View style={styles.accountIcon}>
+                    <Image
+                        source={bankIcon}
+                        style={styles.bankLogo}
+                        resizeMode="contain"
+                    />
+                </View>
+                <View style={styles.accountInfo}>
+                    <Text style={[styles.accountName, { color: colors.text }]}>{item.name}</Text>
+                    <Text style={[styles.accountType, { color: colors.textMuted }]}>
+                        {item.type === 'card' ? 'Credit/Debit Card' : 'Bank Account'}
+                    </Text>
+                </View>
+                <TouchableOpacity
+                    onPress={() => handleDeleteAccount(item.id, item.name)}
+                    style={styles.deleteButton}
+                >
+                    <Ionicons name="trash-outline" size={20} color={colors.error} />
+                </TouchableOpacity>
             </View>
-            <View style={styles.summaryIconContainer}>
-                <Ionicons name="wallet" size={48} color="rgba(255,255,255,0.3)" />
-            </View>
+        );
+    };
+
+    const renderEmpty = () => (
+        <View style={styles.emptyContainer}>
+            <Ionicons name="wallet-outline" size={64} color={colors.textMuted} />
+            <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+                No accounts yet
+            </Text>
+            <Text style={[styles.emptySubtext, { color: colors.textMuted }]}>
+                Add your first bank account or card
+            </Text>
         </View>
     );
 
-    const renderFooter = () => (
-        <View style={styles.footerSection}>
+    const renderActionsSection = () => (
+        <View style={styles.actionsSection}>
+            {/* Export & Import */}
+            <View style={[styles.actionCard, { backgroundColor: colors.surface }]}>
+                <Text style={[styles.actionCardTitle, { color: colors.text }]}>Data Management</Text>
+
+                <TouchableOpacity
+                    style={[styles.actionButton, { backgroundColor: colors.primary + '15', borderColor: colors.primary }]}
+                    onPress={() => setShowExportModal(true)}
+                    disabled={isExporting}
+                >
+                    <Ionicons name="download-outline" size={20} color={colors.primary} />
+                    <Text style={[styles.actionButtonText, { color: colors.primary }]}>Export to CSV</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[styles.actionButton, { backgroundColor: colors.primary + '15', borderColor: colors.primary }]}
+                    onPress={handleImport}
+                    disabled={isImporting}
+                >
+                    {isImporting ? (
+                        <ActivityIndicator size="small" color={colors.primary} />
+                    ) : (
+                        <>
+                            <Ionicons name="cloud-upload-outline" size={20} color={colors.primary} />
+                            <Text style={[styles.actionButtonText, { color: colors.primary }]}>Import from CSV</Text>
+                        </>
+                    )}
+                </TouchableOpacity>
+            </View>
+
+            {/* Danger Zone */}
             <View style={[styles.dangerZone, { backgroundColor: colors.surface, borderColor: colors.error + '30' }]}>
                 <Text style={[styles.dangerTitle, { color: colors.error }]}>Danger Zone</Text>
                 <Text style={[styles.dangerDescription, { color: colors.textMuted }]}>
@@ -142,18 +326,6 @@ export const AccountsScreen: React.FC = () => {
                     <Text style={[styles.eraseButtonText, { color: colors.error }]}>Erase All Data</Text>
                 </TouchableOpacity>
             </View>
-        </View>
-    );
-
-    const renderEmpty = () => (
-        <View style={styles.emptyContainer}>
-            <Ionicons name="wallet-outline" size={64} color={colors.textMuted} />
-            <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-                No accounts yet
-            </Text>
-            <Text style={[styles.emptySubtext, { color: colors.textMuted }]}>
-                Add your first bank account or card
-            </Text>
         </View>
     );
 
@@ -183,16 +355,10 @@ export const AccountsScreen: React.FC = () => {
 
             <FlatList
                 data={accounts}
-                keyExtractor={(item) => item.account_id.toString()}
-                renderItem={({ item }) => (
-                    <AccountCard
-                        account={item}
-                        onDelete={() => handleDeleteAccount(item.account_id, item.account_name)}
-                    />
-                )}
-                ListHeaderComponent={accounts.length > 0 ? renderHeader : null}
+                keyExtractor={(item) => item.id.toString()}
+                renderItem={renderAccountItem}
                 ListEmptyComponent={renderEmpty}
-                ListFooterComponent={renderFooter}
+                ListFooterComponent={renderActionsSection}
                 contentContainerStyle={[styles.listContent, { paddingBottom: 120 }]}
                 showsVerticalScrollIndicator={false}
             />
@@ -216,7 +382,6 @@ export const AccountsScreen: React.FC = () => {
                         </View>
 
                         <View style={styles.modalBody}>
-                            {/* Account Name */}
                             <View style={styles.inputSection}>
                                 <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
                                     Account Name
@@ -235,7 +400,6 @@ export const AccountsScreen: React.FC = () => {
                                 />
                             </View>
 
-                            {/* Account Type */}
                             <View style={styles.inputSection}>
                                 <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
                                     Account Type
@@ -301,6 +465,98 @@ export const AccountsScreen: React.FC = () => {
                 </View>
             </Modal>
 
+            {/* Export Modal */}
+            <Modal
+                visible={showExportModal}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setShowExportModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <SafeAreaView style={[styles.modalContent, { backgroundColor: colors.background }]}>
+                        <View style={styles.modalHeader}>
+                            <Text style={[styles.modalTitle, { color: colors.text }]}>
+                                Export Expenses
+                            </Text>
+                            <TouchableOpacity onPress={() => setShowExportModal(false)}>
+                                <Ionicons name="close" size={24} color={colors.text} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.modalBody}>
+                            <View style={styles.inputSection}>
+                                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                                    Start Date
+                                </Text>
+                                <TouchableOpacity
+                                    style={[styles.dateInput, { backgroundColor: colors.surfaceVariant, borderColor: colors.border }]}
+                                    onPress={() => setShowStartPicker(true)}
+                                >
+                                    <Ionicons name="calendar" size={20} color={colors.primary} />
+                                    <Text style={[styles.dateText, { color: colors.text }]}>
+                                        {formatDate(exportStartDate)}
+                                    </Text>
+                                </TouchableOpacity>
+                                {showStartPicker && (
+                                    <DateTimePicker
+                                        value={exportStartDate}
+                                        mode="date"
+                                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                                        onChange={(event, date) => {
+                                            setShowStartPicker(false);
+                                            if (date) setExportStartDate(date);
+                                        }}
+                                    />
+                                )}
+                            </View>
+
+                            <View style={styles.inputSection}>
+                                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                                    End Date
+                                </Text>
+                                <TouchableOpacity
+                                    style={[styles.dateInput, { backgroundColor: colors.surfaceVariant, borderColor: colors.border }]}
+                                    onPress={() => setShowEndPicker(true)}
+                                >
+                                    <Ionicons name="calendar" size={20} color={colors.primary} />
+                                    <Text style={[styles.dateText, { color: colors.text }]}>
+                                        {formatDate(exportEndDate)}
+                                    </Text>
+                                </TouchableOpacity>
+                                {showEndPicker && (
+                                    <DateTimePicker
+                                        value={exportEndDate}
+                                        mode="date"
+                                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                                        onChange={(event, date) => {
+                                            setShowEndPicker(false);
+                                            if (date) setExportEndDate(date);
+                                        }}
+                                    />
+                                )}
+                            </View>
+                        </View>
+
+                        <View style={styles.modalFooter}>
+                            <TouchableOpacity
+                                style={[styles.submitButton, { backgroundColor: colors.primary }]}
+                                onPress={handleExport}
+                                disabled={isExporting}
+                            >
+                                {isExporting ? (
+                                    <ActivityIndicator size="small" color="#FFFFFF" />
+                                ) : (
+                                    <>
+                                        <Ionicons name="download" size={20} color="#FFFFFF" />
+                                        <Text style={styles.submitButtonText}>Export CSV</Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </SafeAreaView>
+                </View>
+            </Modal>
+
             {/* Erase Data Modal */}
             <Modal
                 visible={showEraseModal}
@@ -342,9 +598,6 @@ export const AccountsScreen: React.FC = () => {
                                 </Text>
                                 <Text style={[styles.deleteItem, { color: colors.textSecondary }]}>
                                     • All your expense records
-                                </Text>
-                                <Text style={[styles.deleteItem, { color: colors.textSecondary }]}>
-                                    • All category summaries
                                 </Text>
                             </View>
 
@@ -445,42 +698,86 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-    summaryCard: {
-        flexDirection: 'row',
-        margin: 16,
-        padding: 20,
-        borderRadius: 20,
-        overflow: 'hidden',
-    },
-    summaryContent: {
-        flex: 1,
-    },
-    summaryLabel: {
-        color: 'rgba(255,255,255,0.8)',
-        fontSize: 14,
-        fontWeight: '500',
-    },
-    summaryAmount: {
-        color: '#FFFFFF',
-        fontSize: 32,
-        fontWeight: '700',
-        marginVertical: 8,
-    },
-    summarySubtext: {
-        color: 'rgba(255,255,255,0.7)',
-        fontSize: 13,
-    },
-    summaryIconContainer: {
-        justifyContent: 'center',
-    },
     listContent: {
-        paddingBottom: 30,
+        padding: 16,
         flexGrow: 1,
     },
-    footerSection: {
-        marginTop: 32,
-        paddingHorizontal: 16,
-        paddingBottom: 20,
+    accountCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        borderRadius: 16,
+        marginBottom: 12,
+    },
+    accountIcon: {
+        width: 48,
+        height: 48,
+        borderRadius: 14,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 14,
+    },
+    accountInfo: {
+        flex: 1,
+    },
+    accountName: {
+        fontSize: 16,
+        fontWeight: '600',
+        marginBottom: 4,
+    },
+    accountType: {
+        fontSize: 13,
+    },
+    deleteButton: {
+        padding: 8,
+    },
+    bankLogo: {
+        width: 40,
+        height: 40,
+    },
+    emptyContainer: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 40,
+        marginTop: 60,
+    },
+    emptyText: {
+        fontSize: 18,
+        fontWeight: '600',
+        marginTop: 16,
+    },
+    emptySubtext: {
+        fontSize: 14,
+        marginTop: 8,
+        textAlign: 'center',
+    },
+    actionsSection: {
+        marginTop: 24,
+        gap: 16,
+    },
+    actionCard: {
+        padding: 20,
+        borderRadius: 16,
+        gap: 12,
+    },
+    actionCardTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        marginBottom: 4,
+    },
+    actionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 14,
+        borderRadius: 12,
+        borderWidth: 1,
+        gap: 8,
+    },
+    actionButtonText: {
+        fontSize: 14,
+        fontWeight: '600',
     },
     dangerZone: {
         padding: 20,
@@ -509,23 +806,6 @@ const styles = StyleSheet.create({
     eraseButtonText: {
         fontSize: 14,
         fontWeight: '600',
-    },
-    emptyContainer: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 40,
-        marginTop: 60,
-    },
-    emptyText: {
-        fontSize: 18,
-        fontWeight: '600',
-        marginTop: 16,
-    },
-    emptySubtext: {
-        fontSize: 14,
-        marginTop: 8,
-        textAlign: 'center',
     },
     modalOverlay: {
         flex: 1,
@@ -591,6 +871,18 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         padding: 14,
         fontSize: 16,
+    },
+    dateInput: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 14,
+        borderRadius: 12,
+        borderWidth: 1,
+        gap: 12,
+    },
+    dateText: {
+        fontSize: 16,
+        fontWeight: '500',
     },
     typeSelector: {
         flexDirection: 'row',

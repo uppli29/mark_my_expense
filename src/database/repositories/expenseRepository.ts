@@ -166,4 +166,35 @@ export const expenseRepository = {
     `, [limit]);
         return result;
     },
+
+    // Bulk create expenses (for CSV import)
+    async bulkCreate(
+        expenses: Array<{
+            accountId: number;
+            amount: number;
+            category: string;
+            date: string; // Already in SQL format YYYY-MM-DD
+            description?: string;
+        }>
+    ): Promise<number> {
+        const db = await getDatabase();
+        let insertedCount = 0;
+
+        for (const expense of expenses) {
+            await db.runAsync(
+                `INSERT INTO expenses (account_id, amount, category, date, description) 
+                 VALUES (?, ?, ?, ?, ?)`,
+                [
+                    expense.accountId,
+                    expense.amount,
+                    expense.category,
+                    expense.date,
+                    expense.description || null
+                ]
+            );
+            insertedCount++;
+        }
+
+        return insertedCount;
+    },
 };

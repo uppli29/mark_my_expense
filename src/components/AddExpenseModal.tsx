@@ -223,7 +223,6 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
                                             setDate(selectedDate);
                                         }
                                     }}
-                                    maximumDate={new Date()}
                                 />
                             )}
                         </View>
@@ -278,13 +277,15 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingVertical: 16,
+        paddingHorizontal: 20,
+        paddingTop: 20,
+        paddingBottom: 16,
         borderBottomWidth: 1,
         borderBottomColor: 'rgba(0,0,0,0.1)',
     },
     closeButton: {
-        padding: 4,
+        padding: 12,
+        marginLeft: -8,
     },
     headerTitle: {
         fontSize: 18,

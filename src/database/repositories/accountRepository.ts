@@ -67,4 +67,14 @@ export const accountRepository = {
 
         return result;
     },
+
+    // Get account by name (case-insensitive)
+    async getByName(name: string): Promise<Account | null> {
+        const db = await getDatabase();
+        const result = await db.getFirstAsync<Account>(
+            'SELECT * FROM accounts WHERE LOWER(name) = LOWER(?)',
+            [name]
+        );
+        return result || null;
+    },
 };
