@@ -25,6 +25,13 @@ export const initDatabase = async (): Promise<void> => {
     await database.execAsync('CREATE INDEX IF NOT EXISTS idx_expenses_account ON expenses(account_id);');
     await database.execAsync('CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category);');
 
+    // Migration: Add icon column if it doesn't exist
+    try {
+        await database.execAsync('ALTER TABLE accounts ADD COLUMN icon TEXT DEFAULT NULL;');
+    } catch {
+        // Column already exists, ignore error
+    }
+
     console.log('Database initialized successfully');
 };
 

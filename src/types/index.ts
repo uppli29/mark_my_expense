@@ -4,6 +4,7 @@ export interface Account {
     id: number;
     name: string;
     type: 'bank' | 'card';
+    icon: string | null;
     created_at: string;
 }
 
@@ -45,4 +46,5 @@ export interface ExpenseFormData {
 export interface AccountFormData {
     name: string;
     type: 'bank' | 'card';
+    icon: string | null;
 }

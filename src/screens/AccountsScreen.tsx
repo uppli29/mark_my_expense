@@ -13,6 +13,7 @@ import {
     ScrollView,
     Platform,
     Image,
+    KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -28,7 +29,7 @@ import { clearAllData } from '../database/database';
 import { Account } from '../types';
 import { exportToCSV, parseCSV, mapCategoryNameToId } from '../utils/csvUtils';
 import { formatDate } from '../utils/dateUtils';
-import { getBankIcon } from '../utils/bankIcons';
+import { getBankIcon, BANK_ICON_OPTIONS } from '../utils/bankIcons';
 
 export const AccountsScreen: React.FC = () => {
     const { colors } = useTheme();
@@ -37,8 +38,14 @@ export const AccountsScreen: React.FC = () => {
     const [showAddModal, setShowAddModal] = useState(false);
     const [showEraseModal, setShowEraseModal] = useState(false);
     const [showExportModal, setShowExportModal] = useState(false);
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [editingAccount, setEditingAccount] = useState<Account | null>(null);
+    const [editAccountName, setEditAccountName] = useState('');
+    const [editAccountType, setEditAccountType] = useState<'bank' | 'card'>('bank');
+    const [editAccountIcon, setEditAccountIcon] = useState<string | null>(null);
     const [newAccountName, setNewAccountName] = useState('');
     const [accountType, setAccountType] = useState<'bank' | 'card'>('bank');
+    const [accountIcon, setAccountIcon] = useState<string | null>(null);
     const [deleteConfirmText, setDeleteConfirmText] = useState('');
     const [isErasing, setIsErasing] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
@@ -74,9 +81,10 @@ export const AccountsScreen: React.FC = () => {
         }
 
         try {
-            await accountRepository.create(newAccountName.trim(), accountType);
+            await accountRepository.create(newAccountName.trim(), accountType, accountIcon);
             setNewAccountName('');
             setAccountType('bank');
+            setAccountIcon(null);
             setShowAddModal(false);
             loadData();
         } catch (error) {
@@ -104,6 +112,31 @@ export const AccountsScreen: React.FC = () => {
                 },
             ]
         );
+    };
+
+    const handleEditAccount = (account: Account) => {
+        setEditingAccount(account);
+        setEditAccountName(account.name);
+        setEditAccountType(account.type);
+        setEditAccountIcon(account.icon);
+        setShowEditModal(true);
+    };
+
+    const handleSaveEditAccount = async () => {
+        if (!editingAccount) return;
+        if (!editAccountName.trim()) {
+            Alert.alert('Error', 'Please enter an account name');
+            return;
+        }
+
+        try {
+            await accountRepository.update(editingAccount.id, editAccountName.trim(), editAccountType, editAccountIcon);
+            setShowEditModal(false);
+            setEditingAccount(null);
+            loadData();
+        } catch (error) {
+            Alert.alert('Error', 'Failed to update account');
+        }
     };
 
     const handleEraseAllData = async () => {
@@ -223,13 +256,33 @@ export const AccountsScreen: React.FC = () => {
             }> = [];
 
             const missingAccounts: string[] = [];
+            const createdAccounts: string[] = [];
 
             for (const row of parsedRows) {
                 if (row.account === '' || row.account === null) {
                     console.warn("Account is empty/missing. Skipping row.", row);
                     continue;
                 }
-                const account = await accountRepository.getByName(row.account);
+
+                let account = await accountRepository.getByName(row.account);
+
+                // Auto-create account if it doesn't exist
+                if (!account) {
+                    try {
+                        const newAccountId = await accountRepository.create(row.account, 'bank');
+                        account = await accountRepository.getById(newAccountId);
+                        if (account && !createdAccounts.includes(row.account)) {
+                            createdAccounts.push(row.account);
+                        }
+                    } catch (createError) {
+                        console.error('Failed to create account:', row.account, createError);
+                        if (!missingAccounts.includes(row.account)) {
+                            missingAccounts.push(row.account);
+                        }
+                        continue;
+                    }
+                }
+
                 if (!account) {
                     if (!missingAccounts.includes(row.account)) {
                         missingAccounts.push(row.account);
@@ -248,7 +301,7 @@ export const AccountsScreen: React.FC = () => {
 
             if (expensesToCreate.length === 0) {
                 const msg = missingAccounts.length > 0
-                    ? `No expenses imported. Missing accounts: ${missingAccounts.join(', ')}`
+                    ? `No expenses imported. Failed to create accounts: ${missingAccounts.join(', ')}`
                     : 'No valid expenses found in CSV';
                 Alert.alert('Import Failed', msg);
                 setIsImporting(false);
@@ -258,8 +311,11 @@ export const AccountsScreen: React.FC = () => {
             const insertedCount = await expenseRepository.bulkCreate(expensesToCreate);
 
             let successMsg = `Successfully imported ${insertedCount} expenses`;
+            if (createdAccounts.length > 0) {
+                successMsg += `\n\nAuto-created accounts: ${createdAccounts.join(', ')}`;
+            }
             if (missingAccounts.length > 0) {
-                successMsg += `\n\nSkipped rows with missing accounts: ${missingAccounts.join(', ')}`;
+                successMsg += `\n\nSkipped rows with failed accounts: ${missingAccounts.join(', ')}`;
             }
 
             Alert.alert('Import Complete', successMsg);
@@ -328,7 +384,7 @@ export const AccountsScreen: React.FC = () => {
     };
 
     const renderAccountItem = ({ item }: { item: Account }) => {
-        const bankIcon = getBankIcon(item.name);
+        const bankIcon = getBankIcon(item.name, item.icon);
 
         return (
             <View style={[styles.accountCard, { backgroundColor: colors.surface }]}>
@@ -345,12 +401,20 @@ export const AccountsScreen: React.FC = () => {
                         {item.type === 'card' ? 'Credit/Debit Card' : 'Bank Account'}
                     </Text>
                 </View>
-                <TouchableOpacity
-                    onPress={() => handleDeleteAccount(item.id, item.name)}
-                    style={styles.deleteButton}
-                >
-                    <Ionicons name="trash-outline" size={20} color={colors.error} />
-                </TouchableOpacity>
+                <View style={styles.accountActions}>
+                    <TouchableOpacity
+                        onPress={() => handleEditAccount(item)}
+                        style={styles.editButton}
+                    >
+                        <Ionicons name="pencil-outline" size={20} color={colors.primary} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={() => handleDeleteAccount(item.id, item.name)}
+                        style={styles.deleteButton}
+                    >
+                        <Ionicons name="trash-outline" size={20} color={colors.error} />
+                    </TouchableOpacity>
+                </View>
             </View>
         );
     };
@@ -464,8 +528,17 @@ export const AccountsScreen: React.FC = () => {
                 animationType="slide"
                 onRequestClose={() => setShowAddModal(false)}
             >
-                <View style={styles.modalOverlay}>
-                    <SafeAreaView style={[styles.modalContent, { backgroundColor: colors.background }]}>
+                <KeyboardAvoidingView
+                    behavior="padding"
+                    style={styles.modalOverlay}
+                    keyboardVerticalOffset={0}
+                >
+                    <TouchableOpacity
+                        style={styles.modalDismissArea}
+                        activeOpacity={1}
+                        onPress={() => setShowAddModal(false)}
+                    />
+                    <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
                         <View style={styles.modalHeader}>
                             <Text style={[styles.modalTitle, { color: colors.text }]}>
                                 Add Account
@@ -475,7 +548,11 @@ export const AccountsScreen: React.FC = () => {
                             </TouchableOpacity>
                         </View>
 
-                        <View style={styles.modalBody}>
+                        <ScrollView
+                            style={styles.modalBody}
+                            keyboardShouldPersistTaps="handled"
+                            showsVerticalScrollIndicator={false}
+                        >
                             <View style={styles.inputSection}>
                                 <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
                                     Account Name
@@ -544,7 +621,38 @@ export const AccountsScreen: React.FC = () => {
                                     </TouchableOpacity>
                                 </View>
                             </View>
-                        </View>
+
+                            <View style={styles.inputSection}>
+                                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                                    Bank Icon (Optional)
+                                </Text>
+                                <ScrollView
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    style={styles.iconPickerContainer}
+                                    contentContainerStyle={styles.iconPickerContent}
+                                >
+                                    {BANK_ICON_OPTIONS.map((option) => (
+                                        <TouchableOpacity
+                                            key={option.key}
+                                            style={[
+                                                styles.iconOption,
+                                                { borderColor: colors.border },
+                                                (accountIcon === option.key || (!accountIcon && option.key === 'default')) &&
+                                                { borderColor: colors.primary, backgroundColor: colors.primary + '15' }
+                                            ]}
+                                            onPress={() => setAccountIcon(option.key === 'default' ? null : option.key)}
+                                        >
+                                            <Image
+                                                source={option.icon}
+                                                style={styles.iconOptionImage}
+                                                resizeMode="contain"
+                                            />
+                                        </TouchableOpacity>
+                                    ))}
+                                </ScrollView>
+                            </View>
+                        </ScrollView>
 
                         <View style={styles.modalFooter}>
                             <TouchableOpacity
@@ -555,8 +663,153 @@ export const AccountsScreen: React.FC = () => {
                                 <Text style={styles.submitButtonText}>Add Account</Text>
                             </TouchableOpacity>
                         </View>
-                    </SafeAreaView>
-                </View>
+                    </View>
+                </KeyboardAvoidingView>
+            </Modal>
+
+            {/* Edit Account Modal */}
+            <Modal
+                visible={showEditModal}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setShowEditModal(false)}
+            >
+                <KeyboardAvoidingView
+                    behavior="padding"
+                    style={styles.modalOverlay}
+                    keyboardVerticalOffset={0}
+                >
+                    <TouchableOpacity
+                        style={styles.modalDismissArea}
+                        activeOpacity={1}
+                        onPress={() => setShowEditModal(false)}
+                    />
+                    <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
+                        <View style={styles.modalHeader}>
+                            <Text style={[styles.modalTitle, { color: colors.text }]}>
+                                Edit Account
+                            </Text>
+                            <TouchableOpacity onPress={() => setShowEditModal(false)}>
+                                <Ionicons name="close" size={24} color={colors.text} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView
+                            style={styles.modalBody}
+                            keyboardShouldPersistTaps="handled"
+                            showsVerticalScrollIndicator={false}
+                        >
+                            <View style={styles.inputSection}>
+                                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                                    Account Name
+                                </Text>
+                                <TextInput
+                                    style={[styles.textInput, {
+                                        backgroundColor: colors.surfaceVariant,
+                                        borderColor: colors.border,
+                                        color: colors.text
+                                    }]}
+                                    value={editAccountName}
+                                    onChangeText={setEditAccountName}
+                                    placeholder="e.g., HDFC Savings, ICICI Credit Card"
+                                    placeholderTextColor={colors.textMuted}
+                                />
+                            </View>
+
+                            <View style={styles.inputSection}>
+                                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                                    Account Type
+                                </Text>
+                                <View style={styles.typeSelector}>
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.typeButton,
+                                            { backgroundColor: colors.surface, borderColor: colors.border },
+                                            editAccountType === 'bank' && { backgroundColor: colors.primary + '15', borderColor: colors.primary }
+                                        ]}
+                                        onPress={() => setEditAccountType('bank')}
+                                    >
+                                        <Ionicons
+                                            name="business"
+                                            size={24}
+                                            color={editAccountType === 'bank' ? colors.primary : colors.textMuted}
+                                        />
+                                        <Text style={[
+                                            styles.typeText,
+                                            { color: colors.text },
+                                            editAccountType === 'bank' && { color: colors.primary, fontWeight: '600' }
+                                        ]}>
+                                            Bank
+                                        </Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.typeButton,
+                                            { backgroundColor: colors.surface, borderColor: colors.border },
+                                            editAccountType === 'card' && { backgroundColor: colors.primary + '15', borderColor: colors.primary }
+                                        ]}
+                                        onPress={() => setEditAccountType('card')}
+                                    >
+                                        <Ionicons
+                                            name="card"
+                                            size={24}
+                                            color={editAccountType === 'card' ? colors.primary : colors.textMuted}
+                                        />
+                                        <Text style={[
+                                            styles.typeText,
+                                            { color: colors.text },
+                                            editAccountType === 'card' && { color: colors.primary, fontWeight: '600' }
+                                        ]}>
+                                            Card
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+
+                            <View style={styles.inputSection}>
+                                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                                    Bank Icon (Optional)
+                                </Text>
+                                <ScrollView
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    style={styles.iconPickerContainer}
+                                    contentContainerStyle={styles.iconPickerContent}
+                                >
+                                    {BANK_ICON_OPTIONS.map((option) => (
+                                        <TouchableOpacity
+                                            key={option.key}
+                                            style={[
+                                                styles.iconOption,
+                                                { borderColor: colors.border },
+                                                (editAccountIcon === option.key || (!editAccountIcon && option.key === 'default')) &&
+                                                { borderColor: colors.primary, backgroundColor: colors.primary + '15' }
+                                            ]}
+                                            onPress={() => setEditAccountIcon(option.key === 'default' ? null : option.key)}
+                                        >
+                                            <Image
+                                                source={option.icon}
+                                                style={styles.iconOptionImage}
+                                                resizeMode="contain"
+                                            />
+                                        </TouchableOpacity>
+                                    ))}
+                                </ScrollView>
+                            </View>
+                        </ScrollView>
+
+                        <View style={styles.modalFooter}>
+                            <TouchableOpacity
+                                style={[styles.submitButton, { backgroundColor: colors.primary }]}
+                                onPress={handleSaveEditAccount}
+                            >
+                                <Ionicons name="checkmark-circle" size={22} color="#FFFFFF" />
+                                <Text style={styles.submitButtonText}>Save Changes</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </KeyboardAvoidingView>
             </Modal>
 
             {/* Export Modal */}
@@ -822,6 +1075,14 @@ const styles = StyleSheet.create({
     accountType: {
         fontSize: 13,
     },
+    accountActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    editButton: {
+        padding: 8,
+    },
     deleteButton: {
         padding: 8,
     },
@@ -905,6 +1166,9 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
         justifyContent: 'flex-end',
+    },
+    modalDismissArea: {
+        flex: 1, // Takes up remaining space above modal for tap-to-dismiss
     },
     modalContent: {
         borderTopLeftRadius: 24,
@@ -1042,5 +1306,25 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
         fontSize: 16,
         fontWeight: '600',
+    },
+    iconPickerContainer: {
+        marginTop: 8,
+    },
+    iconPickerContent: {
+        paddingVertical: 8,
+        gap: 12,
+    },
+    iconOption: {
+        width: 56,
+        height: 56,
+        borderRadius: 12,
+        borderWidth: 2,
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 8,
+    },
+    iconOptionImage: {
+        width: 36,
+        height: 36,
     },
 });

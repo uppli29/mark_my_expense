@@ -17,6 +17,7 @@ const bankIcons: { [key: string]: ImageSourcePropType } = {
 
     // Private Sector Banks
     hdfc: require('../assets/banks/Private Sector Banks/bi-HDFC.png'),
+    cityunion: require('../assets/banks/Private Sector Banks/bi-CityUnion.png'),
     icici: require('../assets/banks/Private Sector Banks/bi-ICICI.png'),
     axis: require('../assets/banks/Private Sector Banks/bi-axis.png'),
     kotak: require('../assets/banks/Private Sector Banks/bi-kotak.png'),
@@ -44,14 +45,64 @@ const bankIcons: { [key: string]: ImageSourcePropType } = {
     default: require('../assets/banks/bi-Placeholder.png'),
 };
 
-export const getBankIcon = (accountName: string): ImageSourcePropType => {
+// Export bank icons list for picker
+export const BANK_ICON_OPTIONS = [
+    { key: 'default', label: 'Default', icon: bankIcons.default },
+    // Public Sector
+    { key: 'sbi', label: 'SBI', icon: bankIcons.sbi },
+    { key: 'pnb', label: 'PNB', icon: bankIcons.pnb },
+    { key: 'bob', label: 'Bank of Baroda', icon: bankIcons.bob },
+    { key: 'canara', label: 'Canara Bank', icon: bankIcons.canara },
+    { key: 'union', label: 'Union Bank', icon: bankIcons.union },
+    { key: 'boi', label: 'Bank of India', icon: bankIcons.boi },
+    { key: 'indian', label: 'Indian Bank', icon: bankIcons.indian },
+    { key: 'central', label: 'Central Bank', icon: bankIcons.central },
+    { key: 'ioB', label: 'Indian Overseas', icon: bankIcons.ioB },
+    { key: 'uco', label: 'UCO Bank', icon: bankIcons.uco },
+    { key: 'bom', label: 'Bank of Maharashtra', icon: bankIcons.bom },
+    { key: 'punjab_sind', label: 'Punjab & Sind', icon: bankIcons.punjab_sind },
+    // Private Sector
+    { key: 'hdfc', label: 'HDFC Bank', icon: bankIcons.hdfc },
+    { key: 'icici', label: 'ICICI Bank', icon: bankIcons.icici },
+    { key: 'axis', label: 'Axis Bank', icon: bankIcons.axis },
+    { key: 'kotak', label: 'Kotak Mahindra', icon: bankIcons.kotak },
+    { key: 'indusind', label: 'IndusInd Bank', icon: bankIcons.indusind },
+    { key: 'yes', label: 'Yes Bank', icon: bankIcons.yes },
+    { key: 'idfc', label: 'IDFC First', icon: bankIcons.idfc },
+    { key: 'idbi', label: 'IDBI Bank', icon: bankIcons.idbi },
+    { key: 'federal', label: 'Federal Bank', icon: bankIcons.federal },
+    { key: 'rbl', label: 'RBL Bank', icon: bankIcons.rbl },
+    { key: 'south_indian', label: 'South Indian Bank', icon: bankIcons.south_indian },
+    { key: 'cityunion', label: 'City Union Bank', icon: bankIcons.cityunion },
+    // Payment Banks
+    { key: 'paytm', label: 'Paytm Payments', icon: bankIcons.paytm },
+    { key: 'airtel', label: 'Airtel Payments', icon: bankIcons.airtel },
+    { key: 'jio', label: 'Jio Payments', icon: bankIcons.jio },
+    // Foreign Banks
+    { key: 'citibank', label: 'Citibank', icon: bankIcons.citibank },
+    { key: 'hsbc', label: 'HSBC', icon: bankIcons.hsbc },
+    { key: 'sc', label: 'Standard Chartered', icon: bankIcons.sc },
+    { key: 'dbs', label: 'DBS Bank', icon: bankIcons.dbs },
+    { key: 'deutsche', label: 'Deutsche Bank', icon: bankIcons.deutsche },
+];
+
+export const getBankIconByKey = (key: string): ImageSourcePropType => {
+    return bankIcons[key] || bankIcons.default;
+};
+
+export const getBankIcon = (accountName: string, iconKey?: string | null): ImageSourcePropType => {
+    // If a specific icon key is provided, use it
+    if (iconKey && bankIcons[iconKey]) {
+        return bankIcons[iconKey];
+    }
     const normalizedName = accountName.toLowerCase().replace(/[^a-z0-9]/g, '');
 
     if (normalizedName.includes('sbi') || normalizedName.includes('statebank')) return bankIcons.sbi;
     if (normalizedName.includes('pnb') || normalizedName.includes('punjabnational')) return bankIcons.pnb;
     if (normalizedName.includes('bob') || normalizedName.includes('baroda')) return bankIcons.bob;
     if (normalizedName.includes('canara')) return bankIcons.canara;
-    if (normalizedName.includes('union')) return bankIcons.union;
+    if (normalizedName.includes('cityunion') || normalizedName.includes('city union') || normalizedName.includes('cub')) return bankIcons.cityunion;
+    if (normalizedName.includes('union') && !normalizedName.includes('city')) return bankIcons.union;
     if (normalizedName.includes('boi') || normalizedName.includes('bankofindia')) return bankIcons.boi;
     if (normalizedName.includes('indian')) return bankIcons.indian;
     if (normalizedName.includes('central')) return bankIcons.central;

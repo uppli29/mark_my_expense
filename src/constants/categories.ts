@@ -13,6 +13,12 @@ export const CATEGORIES = [
   { id: 'personal', name: 'Personal Care', icon: 'body', color: '#A855F7' },
   { id: 'groceries', name: 'Groceries', icon: 'basket', color: '#84CC16' },
   { id: 'gadgets', name: 'Gadgets', icon: 'phone-portrait', color: '#6366F1' },
+  { id: 'trip', name: 'Trip', icon: 'map', color: '#0EA5E9' },
+  { id: 'investment', name: 'Investment', icon: 'trending-up', color: '#059669' },
+  { id: 'leisure', name: 'Leisure', icon: 'cafe', color: '#D946EF' },
+  { id: 'office', name: 'Office', icon: 'briefcase', color: '#78716C' },
+  { id: 'fuel', name: 'Fuel', icon: 'speedometer', color: '#EA580C' },
+  { id: 'kids', name: 'Kids', icon: 'happy', color: '#FB7185' },
   { id: 'others', name: 'Others', icon: 'ellipsis-horizontal', color: '#64748B' },
 ] as const;
 

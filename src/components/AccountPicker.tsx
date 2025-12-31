@@ -46,7 +46,7 @@ export const AccountPicker: React.FC<AccountPickerProps> = ({
                 <View style={styles.selectorContent}>
                     <View style={[styles.iconBox, { backgroundColor: 'transparent' }]}>
                         <Image
-                            source={getBankIcon(selectedAccount?.name || '')}
+                            source={getBankIcon(selectedAccount?.name || '', selectedAccount?.icon)}
                             style={styles.bankIconSmall}
                             resizeMode="contain"
                         />
@@ -103,7 +103,7 @@ export const AccountPicker: React.FC<AccountPickerProps> = ({
                                     >
                                         <View style={[styles.accountIcon, { backgroundColor: 'transparent' }]}>
                                             <Image
-                                                source={getBankIcon(item.name)}
+                                                source={getBankIcon(item.name, item.icon)}
                                                 style={styles.bankIconLarge}
                                                 resizeMode="contain"
                                             />

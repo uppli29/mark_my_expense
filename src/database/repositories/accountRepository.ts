@@ -23,21 +23,21 @@ export const accountRepository = {
     },
 
     // Create new account
-    async create(name: string, type: 'bank' | 'card' = 'bank'): Promise<number> {
+    async create(name: string, type: 'bank' | 'card' = 'bank', icon: string | null = null): Promise<number> {
         const db = await getDatabase();
         const result = await db.runAsync(
-            'INSERT INTO accounts (name, type) VALUES (?, ?)',
-            [name, type]
+            'INSERT INTO accounts (name, type, icon) VALUES (?, ?, ?)',
+            [name, type, icon]
         );
         return result.lastInsertRowId;
     },
 
     // Update account
-    async update(id: number, name: string, type: 'bank' | 'card'): Promise<void> {
+    async update(id: number, name: string, type: 'bank' | 'card', icon: string | null = null): Promise<void> {
         const db = await getDatabase();
         await db.runAsync(
-            'UPDATE accounts SET name = ?, type = ? WHERE id = ?',
-            [name, type, id]
+            'UPDATE accounts SET name = ?, type = ?, icon = ? WHERE id = ?',
+            [name, type, icon, id]
         );
     },
 

@@ -6,6 +6,7 @@ import {
     FlatList,
     ActivityIndicator,
     Alert,
+    TouchableOpacity,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
@@ -132,11 +133,9 @@ export const ExpensesScreen: React.FC = () => {
                 endDate={endDate}
                 onStartDateChange={(date) => {
                     setStartDate(date);
-                    setLoading(true);
                 }}
                 onEndDateChange={(date) => {
                     setEndDate(date);
-                    setLoading(true);
                 }}
             />
 
@@ -145,16 +144,26 @@ export const ExpensesScreen: React.FC = () => {
                 <Text style={[styles.filterLabel, { color: colors.textSecondary }]}>Account</Text>
                 <View style={styles.accountPickerContainer}>
                     <AccountPicker
-                        accounts={[{ id: 0, name: 'All Accounts', type: 'bank', created_at: '' }, ...accounts]}
+                        accounts={[{ id: 0, name: 'All Accounts', type: 'bank', icon: null, created_at: '' }, ...accounts]}
                         selectedAccountId={selectedAccountId || 0}
                         onSelect={(id) => {
                             setSelectedAccountId(id === 0 ? null : id);
-                            setLoading(true);
                         }}
                         placeholder="All Accounts"
                     />
                 </View>
             </View>
+
+            {/* Apply Button */}
+            <TouchableOpacity
+                style={[styles.applyButton, { backgroundColor: colors.primary }]}
+                onPress={() => {
+                    setLoading(true);
+                    loadData();
+                }}
+            >
+                <Text style={styles.applyButtonText}>Apply Filter</Text>
+            </TouchableOpacity>
 
             {/* Summary */}
             <View style={[styles.summaryBanner, { backgroundColor: colors.primary + '10' }]}>
@@ -325,5 +334,18 @@ const styles = StyleSheet.create({
         fontSize: 14,
         textAlign: 'center',
         marginTop: 8,
+    },
+    applyButton: {
+        marginHorizontal: 16,
+        marginVertical: 12,
+        paddingVertical: 14,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    applyButtonText: {
+        color: '#FFFFFF',
+        fontSize: 16,
+        fontWeight: '600',
     },
 });

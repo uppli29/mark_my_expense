@@ -4,8 +4,14 @@ export const CREATE_ACCOUNTS_TABLE = `
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     type TEXT CHECK(type IN ('bank', 'card')) DEFAULT 'bank',
+    icon TEXT DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+`;
+
+// Migration for existing databases to add icon column
+export const ADD_ICON_COLUMN = `
+  ALTER TABLE accounts ADD COLUMN icon TEXT DEFAULT NULL;
 `;
 
 export const CREATE_EXPENSES_TABLE = `
