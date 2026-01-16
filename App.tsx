@@ -6,6 +6,7 @@ import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { initDatabase } from './src/database/database';
 import { notificationService } from './src/services/notificationService';
+import { smsListenerService } from './src/services/smsListenerService';
 
 // Context to share deep link state across the app
 interface DeepLinkContextType {
@@ -34,6 +35,9 @@ const AppContent: React.FC = () => {
 
         // Schedule notifications after DB is ready
         await notificationService.scheduleAllNotifications();
+
+         // Initialize SMS service for auto-tracking (Android only)
+        await smsListenerService.initSMSService();
       } catch (error) {
         console.error('App initialization failed:', error);
       }

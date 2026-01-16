@@ -32,6 +32,16 @@ export const initDatabase = async (): Promise<void> => {
         // Column already exists, ignore error
     }
 
+    // Create processed SMS hashes table for duplicate prevention
+    await database.execAsync(`
+        CREATE TABLE IF NOT EXISTS processed_sms_hashes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            hash TEXT NOT NULL UNIQUE,
+            processed_at TEXT NOT NULL
+        );
+    `);
+    await database.execAsync('CREATE INDEX IF NOT EXISTS idx_sms_hash ON processed_sms_hashes(hash);');
+
     console.log('Database initialized successfully');
 };
 
@@ -41,10 +51,12 @@ export const clearAllData = async (): Promise<void> => {
     // Delete all data from tables (order matters due to foreign keys)
     await database.execAsync('DELETE FROM expenses;');
     await database.execAsync('DELETE FROM accounts;');
+    await database.execAsync('DELETE FROM processed_sms_hashes;');
 
     // Reset auto-increment counters
     await database.execAsync("DELETE FROM sqlite_sequence WHERE name='expenses';");
     await database.execAsync("DELETE FROM sqlite_sequence WHERE name='accounts';");
+    await database.execAsync("DELETE FROM sqlite_sequence WHERE name='processed_sms_hashes';");
 
     console.log('All data cleared successfully');
 };

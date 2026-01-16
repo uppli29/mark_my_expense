@@ -169,10 +169,46 @@ export const AccountsScreen: React.FC = () => {
         }
 
         try {
-            await accountRepository.update(editingAccount.id, editAccountName.trim(), editAccountType, editAccountIcon);
-            setShowEditModal(false);
-            setEditingAccount(null);
-            loadData();
+            // Check if an account with the same name and type exists (excluding current account)
+            const existingAccount = await accountRepository.findByNameAndType(
+                editAccountName.trim(),
+                editAccountType,
+                editingAccount.id
+            );
+
+            if (existingAccount) {
+                // Show merge confirmation dialog
+                Alert.alert(
+                    'Account Already Exists',
+                    `An account with the name "${editAccountName.trim()}" and type "${editAccountType === 'bank' ? 'Bank Account' : 'Card'}" already exists.\n\nRenaming will merge all expenses from "${editingAccount.name}" into "${existingAccount.name}" and delete this account.\n\nDo you want to continue?`,
+                    [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                            text: 'Merge',
+                            style: 'destructive',
+                            onPress: async () => {
+                                try {
+                                    // Merge expenses from current account to existing account
+                                    await accountRepository.mergeAccounts(editingAccount.id, existingAccount.id);
+                                    setShowEditModal(false);
+                                    setEditingAccount(null);
+                                    loadData();
+                                    Alert.alert('Success', 'Accounts merged successfully');
+                                } catch (mergeError) {
+                                    console.error('Merge error:', mergeError);
+                                    Alert.alert('Error', 'Failed to merge accounts');
+                                }
+                            },
+                        },
+                    ]
+                );
+            } else {
+                // No conflict, update normally
+                await accountRepository.update(editingAccount.id, editAccountName.trim(), editAccountType, editAccountIcon);
+                setShowEditModal(false);
+                setEditingAccount(null);
+                loadData();
+            }
         } catch (error) {
             Alert.alert('Error', 'Failed to update account');
         }

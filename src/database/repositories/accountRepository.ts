@@ -57,12 +57,14 @@ export const accountRepository = {
       SELECT 
         a.id as account_id,
         a.name as account_name,
-        COALESCE(SUM(e.amount), 0) as total
+        a.icon,
+        COALESCE(SUM(e.amount), 0) as total,
+        COUNT(e.id) as transaction_count
       FROM accounts a
       LEFT JOIN expenses e ON a.id = e.account_id 
         AND e.date >= ? AND e.date <= ?
-      GROUP BY a.id, a.name
-      ORDER BY a.created_at DESC
+      GROUP BY a.id, a.name, a.icon
+      ORDER BY total DESC, a.created_at DESC
     `, [startDate, endDate]);
 
         return result;
@@ -76,5 +78,38 @@ export const accountRepository = {
             [name]
         );
         return result || null;
+    },
+
+    // Find account by name and type (for merge detection)
+    async findByNameAndType(
+        name: string,
+        type: 'bank' | 'card',
+        excludeId?: number
+    ): Promise<Account | null> {
+        const db = await getDatabase();
+        let query = 'SELECT * FROM accounts WHERE LOWER(name) = LOWER(?) AND type = ?';
+        const params: (string | number)[] = [name, type];
+
+        if (excludeId !== undefined) {
+            query += ' AND id != ?';
+            params.push(excludeId);
+        }
+
+        const result = await db.getFirstAsync<Account>(query, params);
+        return result || null;
+    },
+
+    // Merge accounts: transfer all expenses from source to target, then delete source
+    async mergeAccounts(sourceAccountId: number, targetAccountId: number): Promise<void> {
+        const db = await getDatabase();
+
+        // Transfer all expenses from source account to target account
+        await db.runAsync(
+            'UPDATE expenses SET account_id = ? WHERE account_id = ?',
+            [targetAccountId, sourceAccountId]
+        );
+
+        // Delete the source account
+        await db.runAsync('DELETE FROM accounts WHERE id = ?', [sourceAccountId]);
     },
 };

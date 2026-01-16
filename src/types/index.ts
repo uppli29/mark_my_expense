@@ -32,6 +32,8 @@ export interface AccountSummary {
     account_id: number;
     account_name: string;
     total: number;
+    transaction_count: number;
+    icon: string | null;
 }
 
 // Form types

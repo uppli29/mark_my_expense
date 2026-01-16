@@ -2,7 +2,6 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { expenseRepository } from '../database/repositories/expenseRepository';
 import { formatCurrency } from '../utils/dateUtils';
-
 // Configure how notifications are handled when app is in foreground
 Notifications.setNotificationHandler({
     handleNotification: async () => ({
@@ -13,11 +12,9 @@ Notifications.setNotificationHandler({
         shouldShowList: true,
     }),
 });
-
 // Notification identifiers for cancellation
 const DAILY_REMINDER_ID = 'daily-expense-reminder';
 const WEEKLY_SUMMARY_ID = 'weekly-expense-summary';
-
 export const notificationService = {
     /**
      * Request notification permissions
@@ -25,17 +22,14 @@ export const notificationService = {
     async requestPermissions(): Promise<boolean> {
         const { status: existingStatus } = await Notifications.getPermissionsAsync();
         let finalStatus = existingStatus;
-
         if (existingStatus !== 'granted') {
             const { status } = await Notifications.requestPermissionsAsync();
             finalStatus = status;
         }
-
         if (finalStatus !== 'granted') {
             console.log('Notification permissions not granted');
             return false;
         }
-
         // Required for Android
         if (Platform.OS === 'android') {
             await Notifications.setNotificationChannelAsync('default', {
@@ -44,7 +38,6 @@ export const notificationService = {
                 vibrationPattern: [0, 250, 250, 250],
                 lightColor: '#6366F1',
             });
-
             await Notifications.setNotificationChannelAsync('reminders', {
                 name: 'Expense Reminders',
                 description: 'Daily and weekly expense tracking reminders',
@@ -53,10 +46,8 @@ export const notificationService = {
                 lightColor: '#6366F1',
             });
         }
-
         return true;
     },
-
     /**
      * Schedule daily reminder at 9 PM
      */
@@ -64,7 +55,6 @@ export const notificationService = {
         try {
             // Cancel existing daily reminder
             await this.cancelNotification(DAILY_REMINDER_ID);
-
             const identifier = await Notifications.scheduleNotificationAsync({
                 identifier: DAILY_REMINDER_ID,
                 content: {
@@ -79,7 +69,6 @@ export const notificationService = {
                     minute: 0,
                 },
             });
-
             console.log('Daily reminder scheduled:', identifier);
             return identifier;
         } catch (error) {
@@ -87,7 +76,6 @@ export const notificationService = {
             return null;
         }
     },
-
     /**
      * Schedule weekly summary at Sunday 9 PM
      */
@@ -95,7 +83,6 @@ export const notificationService = {
         try {
             // Cancel existing weekly summary
             await this.cancelNotification(WEEKLY_SUMMARY_ID);
-
             const identifier = await Notifications.scheduleNotificationAsync({
                 identifier: WEEKLY_SUMMARY_ID,
                 content: {
@@ -111,7 +98,6 @@ export const notificationService = {
                     minute: 0,
                 },
             });
-
             console.log('Weekly summary scheduled:', identifier);
             return identifier;
         } catch (error) {
@@ -119,7 +105,6 @@ export const notificationService = {
             return null;
         }
     },
-
     /**
      * Schedule all notifications
      */
@@ -129,12 +114,10 @@ export const notificationService = {
             console.log('Cannot schedule notifications - no permission');
             return;
         }
-
         await this.scheduleDailyReminder();
         await this.scheduleWeeklySummary();
         console.log('All notifications scheduled');
     },
-
     /**
      * Cancel a specific notification
      */
@@ -145,7 +128,6 @@ export const notificationService = {
             // Notification might not exist, ignore
         }
     },
-
     /**
      * Cancel all scheduled notifications
      */
@@ -153,14 +135,12 @@ export const notificationService = {
         await Notifications.cancelAllScheduledNotificationsAsync();
         console.log('All notifications cancelled');
     },
-
     /**
      * Get all scheduled notifications (for debugging)
      */
     async getScheduledNotifications(): Promise<Notifications.NotificationRequest[]> {
         return await Notifications.getAllScheduledNotificationsAsync();
     },
-
     /**
      * Send an immediate test notification
      */
@@ -174,7 +154,6 @@ export const notificationService = {
             trigger: null, // Immediate
         });
     },
-
     /**
      * Get weekly spending for notification content
      */
@@ -182,13 +161,10 @@ export const notificationService = {
         const today = new Date();
         const weekAgo = new Date(today);
         weekAgo.setDate(today.getDate() - 7);
-
         const total = await expenseRepository.getTotalSpend(weekAgo, today);
         const expenses = await expenseRepository.getByDateRange(weekAgo, today);
-
         return { total, count: expenses.length };
     },
-
     /**
      * Send weekly summary notification with actual data
      * This should be called by a background task or when app opens on Sunday
@@ -197,7 +173,6 @@ export const notificationService = {
         try {
             const { total, count } = await this.getWeeklySpending();
             const formattedTotal = formatCurrency(total);
-
             await Notifications.scheduleNotificationAsync({
                 content: {
                     title: '📊 Your Weekly Summary',
@@ -209,6 +184,24 @@ export const notificationService = {
             });
         } catch (error) {
             console.error('Failed to send weekly summary:', error);
+        }
+    },
+    /**
+     * Show an immediate local notification
+     */
+    async showLocalNotification(title: string, body: string): Promise<void> {
+        try {
+            await Notifications.scheduleNotificationAsync({
+                content: {
+                    title,
+                    body,
+                    sound: 'default',
+                    priority: Notifications.AndroidNotificationPriority.HIGH,
+                },
+                trigger: null, // Immediate
+            });
+        } catch (error) {
+            console.error('Failed to show local notification:', error);
         }
     },
 };

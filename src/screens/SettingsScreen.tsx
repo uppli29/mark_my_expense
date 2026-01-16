@@ -11,12 +11,18 @@ import {
     TextInput,
     ActivityIndicator,
     SafeAreaView,
+    Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { notificationService } from '../services/notificationService';
+import {
+    smsListenerService,
+    SMSPermissionStatus,
+    SMSScanDuration,
+} from '../services/smsListenerService';
 import { clearAllData } from '../database/database';
 
 export const SettingsScreen: React.FC = () => {
@@ -29,6 +35,16 @@ export const SettingsScreen: React.FC = () => {
     const [showEraseModal, setShowEraseModal] = useState(false);
     const [deleteConfirmText, setDeleteConfirmText] = useState('');
     const [isErasing, setIsErasing] = useState(false);
+
+    // SMS Auto-Track state
+    const [smsPermissionStatus, setSmsPermissionStatus] = useState<SMSPermissionStatus>({
+        hasReceiveSmsPermission: false,
+        hasReadSmsPermission: false,
+    });
+    const [isRequestingPermission, setIsRequestingPermission] = useState(false);
+
+    // SMS Scan Duration state
+    const [scanDuration, setScanDuration] = useState<SMSScanDuration>('3months');
 
     const loadNotificationStatus = useCallback(async () => {
         try {
@@ -46,10 +62,24 @@ export const SettingsScreen: React.FC = () => {
         }
     }, []);
 
+    const loadSMSStatus = useCallback(async () => {
+        if (Platform.OS !== 'android') return;
+        try {
+            const permissions = await smsListenerService.checkSMSPermissions();
+            setSmsPermissionStatus(permissions);
+            // Load scan duration setting
+            const duration = await smsListenerService.getScanDuration();
+            setScanDuration(duration);
+        } catch (error) {
+            console.error('Failed to load SMS status:', error);
+        }
+    }, []);
+
     useFocusEffect(
         useCallback(() => {
             loadNotificationStatus();
-        }, [loadNotificationStatus])
+            loadSMSStatus();
+        }, [loadNotificationStatus, loadSMSStatus])
     );
 
     const handleDailyReminderToggle = async (value: boolean) => {
@@ -70,6 +100,30 @@ export const SettingsScreen: React.FC = () => {
             await notificationService.cancelNotification('weekly-expense-summary');
         }
         loadNotificationStatus();
+    };
+
+
+    const handleRequestSMSPermission = async () => {
+        setIsRequestingPermission(true);
+        try {
+            const granted = await smsListenerService.requestSMSPermissions();
+            if (granted) {
+                await loadSMSStatus();
+                // Auto-start listener on permission grant
+                await smsListenerService.startSMSListener();
+                Alert.alert('Success', 'SMS tracking started automatically!');
+            } else {
+                Alert.alert(
+                    'Permission Denied',
+                    'SMS permissions were not granted. You can enable them from device settings.',
+                    [{ text: 'OK' }]
+                );
+            }
+        } catch (error) {
+            Alert.alert('Error', 'Failed to request SMS permissions.');
+        } finally {
+            setIsRequestingPermission(false);
+        }
     };
 
     const handleTestNotification = async () => {
@@ -185,6 +239,113 @@ export const SettingsScreen: React.FC = () => {
                         </Text>
                     </View>
                 </View>
+
+                {/* SMS Auto-Track Section - Android Only */}
+                {Platform.OS === 'android' && (
+                    <View style={styles.section}>
+                        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                            SMS Auto-Track
+                        </Text>
+                        <View style={[styles.card, { backgroundColor: colors.surface }]}>
+                            {/* SMS Permission Status */}
+                            <View style={styles.settingRow}>
+                                <View style={styles.settingInfo}>
+                                    <View style={[styles.iconBox, { backgroundColor: '#EC489920' }]}>
+                                        <Ionicons name="chatbox-ellipses" size={20} color="#EC4899" />
+                                    </View>
+                                    <View style={styles.settingText}>
+                                        <Text style={[styles.settingLabel, { color: colors.text }]}>
+                                            SMS Permission
+                                        </Text>
+                                        <Text style={[styles.settingDescription, { color: colors.textMuted }]}>
+                                            {smsPermissionStatus.hasReceiveSmsPermission && smsPermissionStatus.hasReadSmsPermission
+                                                ? '✓ Granted'
+                                                : 'Required for auto-tracking'}
+                                        </Text>
+                                    </View>
+                                </View>
+                                {!(smsPermissionStatus.hasReceiveSmsPermission && smsPermissionStatus.hasReadSmsPermission) && (
+                                    <TouchableOpacity
+                                        style={[styles.grantButton, { backgroundColor: '#EC4899' }]}
+                                        onPress={handleRequestSMSPermission}
+                                        disabled={isRequestingPermission}
+                                    >
+                                        {isRequestingPermission ? (
+                                            <ActivityIndicator size="small" color="#FFFFFF" />
+                                        ) : (
+                                            <Text style={styles.grantButtonText}>Grant</Text>
+                                        )}
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+
+                            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+                            {/* SMS Scan Duration */}
+                            <View style={styles.settingRow}>
+                                <View style={styles.settingInfo}>
+                                    <View style={[styles.iconBox, { backgroundColor: '#6366F120' }]}>
+                                        <Ionicons name="time" size={20} color="#6366F1" />
+                                    </View>
+                                    <View style={styles.settingText}>
+                                        <Text style={[styles.settingLabel, { color: colors.text }]}>
+                                            Scan Duration
+                                        </Text>
+                                        <Text style={[styles.settingDescription, { color: colors.textMuted }]}>
+                                            How far back to scan SMS on refresh
+                                        </Text>
+                                    </View>
+                                </View>
+                            </View>
+                            {/* Duration Options */}
+                            <View style={styles.durationOptions}>
+                                {(['3months', 'thisYear', 'allTime'] as SMSScanDuration[]).map((option) => {
+                                    const labels: Record<SMSScanDuration, string> = {
+                                        '3months': 'Last 3 Months',
+                                        'thisYear': 'This Year',
+                                        'allTime': 'All Time',
+                                    };
+                                    const isSelected = scanDuration === option;
+                                    return (
+                                        <TouchableOpacity
+                                            key={option}
+                                            style={[
+                                                styles.durationOption,
+                                                { backgroundColor: isSelected ? colors.primary : colors.surfaceVariant },
+                                            ]}
+                                            onPress={async () => {
+                                                setScanDuration(option);
+                                                await smsListenerService.setScanDuration(option);
+                                            }}
+                                        >
+                                            <Text style={[
+                                                styles.durationOptionText,
+                                                { color: isSelected ? '#FFFFFF' : colors.text },
+                                            ]}>
+                                                {labels[option]}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+                        </View>
+                        {/* Supported Banks Info */}
+                        <View style={[styles.statusBanner, { backgroundColor: colors.success + '10' }]}>
+                            <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+                            <Text style={[styles.statusText, { color: colors.success }]}>
+                                Supported: HDFC, ICICI, SBI
+                            </Text>
+                        </View>
+                        {/* SMS Info Note */}
+                        <View style={[styles.statusBanner, { backgroundColor: colors.warning + '10', marginTop: 8 }]}>
+                            <Ionicons name="information-circle" size={18} color={colors.warning} />
+                            <Text style={[styles.statusText, { color: colors.warning }]}>
+                                Expenses are created with "Others" category
+                            </Text>
+                        </View>
+                    </View>
+                )}
+
 
                 {/* Test Section */}
                 <View style={styles.section}>
@@ -571,6 +732,19 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
     },
+    grantButton: {
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        borderRadius: 8,
+        minWidth: 70,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    grantButtonText: {
+        color: '#FFFFFF',
+        fontSize: 14,
+        fontWeight: '600',
+    },
     infoRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -705,6 +879,23 @@ const styles = StyleSheet.create({
     eraseConfirmButtonText: {
         color: '#FFFFFF',
         fontSize: 16,
+        fontWeight: '600',
+    },
+    durationOptions: {
+        flexDirection: 'row',
+        paddingHorizontal: 16,
+        paddingBottom: 16,
+        gap: 8,
+    },
+    durationOption: {
+        flex: 1,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderRadius: 10,
+        alignItems: 'center',
+    },
+    durationOptionText: {
+        fontSize: 12,
         fontWeight: '600',
     },
 });
