@@ -4,7 +4,8 @@
  */
 
 // Types for parsed transaction data
-export type BankType = 'HDFC' | 'ICICI' | 'SBI' | 'UNKNOWN';
+export type BankType = 'HDFC' | 'ICICI' | 'SBI' | 'CANARA' | 'UNKNOWN';
+
 export type TransactionType = 'EXPENSE' | 'INCOME' | 'CREDIT' | 'TRANSFER' | 'UNKNOWN';
 
 export interface ParsedTransaction {
@@ -94,6 +95,18 @@ const SBIPatterns = {
     TRANSFER_FROM_PATTERN: /transfer\s+from\s+([^.\n]+?)(?:\s+Ref|\s+ref|$)/i,
 };
 
+// Canara Bank patterns
+const CanaraBankPatterns = {
+    SENDER_IDS: ['CANBNK', 'CANARA'],
+    UPI_AMOUNT_PATTERN: /Rs\.?\s*([\d,]+(?:\.\d{2})?)\s+paid/i,
+    DEBIT_PATTERN: /INR\s+([\d,]+(?:\.\d{2})?)\s+has\s+been\s+DEBITED/i,
+    UPI_MERCHANT_PATTERN: /\sto\s+([^,]+?)(?:,\s*UPI|\.|-Canara)/i,
+    ACCOUNT_PATTERN: /(?:account|A\/C)\s+(?:XX|X\*+)?(\d{3,4})/i,
+    BALANCE_PATTERN: /(?:Total\s+)?Avail\.?bal\s+INR\s+([\d,]+(?:\.\d{2})?)/i,
+    UPI_REF_PATTERN: /UPI\s+Ref\s+(\d+)/i,
+};
+
+
 /**
  * Generate a hash from the message for duplicate detection
  */
@@ -133,7 +146,13 @@ export function identifyBank(sender: string): BankType {
         return 'SBI';
     }
 
+    // Check Canara Bank
+    if (CanaraBankPatterns.SENDER_IDS.some(id => upperSender.includes(id))) {
+        return 'CANARA';
+    }
+
     return 'UNKNOWN';
+
 }
 
 /**
@@ -151,7 +170,9 @@ export function isTransactionalSMS(sender: string, message: string): boolean {
         'bill alert', 'is due on', 'has requested',
         'payment request', 'collect request', 'ignore if already paid',
         'will be debited', // Future debit notifications
+        'failed due to', // Canara Bank failed transactions
     ];
+
 
     if (skipKeywords.some(keyword => lowerMessage.includes(keyword))) {
         return false;
@@ -169,9 +190,13 @@ export function isTransactionalSMS(sender: string, message: string): boolean {
         'debited', 'credited', 'withdrawn', 'deposited',
         'spent', 'received', 'transferred', 'paid',
         'sent', 'deducted', 'txn',
+        'paid thru', // Canara Bank UPI
+        'has been debited', // Canara Bank debit
+        'has been credited', // Canara Bank credit
     ];
 
     return transactionKeywords.some(keyword => lowerMessage.includes(keyword));
+
 }
 
 /**
@@ -193,6 +218,18 @@ export function extractAmount(message: string, bank: BankType): number | null {
         match = message.match(upiCreditPattern);
         if (match) return parseAmount(match[1]);
     }
+
+    if (bank === 'CANARA') {
+        // Canara Bank specific patterns
+        // Pattern: "Rs.23.00 paid thru"
+        match = message.match(CanaraBankPatterns.UPI_AMOUNT_PATTERN);
+        if (match) return parseAmount(match[1]);
+
+        // Pattern: "INR 50.00 has been DEBITED"
+        match = message.match(CanaraBankPatterns.DEBIT_PATTERN);
+        if (match) return parseAmount(match[1]);
+    }
+
 
     if (bank === 'ICICI') {
         // ICICI multi-currency: "USD 11.80 spent"
@@ -328,6 +365,13 @@ export function extractAccountLast4(message: string, bank: BankType): string | n
             return digits.length >= 4 ? digits.slice(-4) : cardInfo;
         }
     }
+
+    if (bank === 'CANARA') {
+        // Canara Bank account pattern: A/C XX1234
+        match = message.match(CanaraBankPatterns.ACCOUNT_PATTERN);
+        if (match) return match[1];
+    }
+
 
     // Generic patterns
     match = message.match(Patterns.Account.AC_WITH_MASK);
@@ -503,6 +547,23 @@ export function extractMerchant(message: string, bank: BankType): string | null 
         }
     }
 
+    if (bank === 'CANARA') {
+        // Canara Bank UPI merchant pattern: "paid thru A/C XX1234 on 08-8-25 16:41:00 to BMTC BUS KA57F6"
+        match = message.match(CanaraBankPatterns.UPI_MERCHANT_PATTERN);
+        if (match) {
+            const merchant = cleanMerchantName(match[1].trim());
+            if (isValidMerchantName(merchant)) {
+                return merchant;
+            }
+        }
+
+        // Check if it's a generic debit
+        if (message.toLowerCase().includes('debited')) {
+            return 'Canara Bank Debit';
+        }
+    }
+
+
     // Generic patterns
     match = message.match(Patterns.Merchant.TO_PATTERN);
     if (match) {
@@ -531,7 +592,13 @@ export function extractMerchant(message: string, bank: BankType): string | null 
 export function extractReference(message: string): string | null {
     let match: RegExpMatchArray | null = null;
 
+    // Canara Bank UPI Ref pattern
+    const canaraUpiRefPattern = /UPI\s+Ref\s+(\d+)/i;
+    match = message.match(canaraUpiRefPattern);
+    if (match) return match[1];
+
     // UPI Ref No
+
     const upiRefNoPattern = /UPI\s+Ref\s+No\s+(\d{12})/i;
     match = message.match(upiRefNoPattern);
     if (match) return match[1];
@@ -557,7 +624,13 @@ export function extractReference(message: string): string | null {
 export function extractBalance(message: string): number | null {
     let match: RegExpMatchArray | null = null;
 
+    // Canara Bank balance pattern: Total Avail.bal INR 1,092.62
+    const canaraBalancePattern = /(?:Total\s+)?Avail\.?bal\s+INR\s+([\d,]+(?:\.\d{2})?)/i;
+    match = message.match(canaraBalancePattern);
+    if (match) return parseAmount(match[1]);
+
     // Avl bal:INR pattern
+
     const avlBalINRPattern = /Avl\s+bal:?\s*INR\s*([0-9,]+(?:\.\d{2})?)/i;
     match = message.match(avlBalINRPattern);
     if (match) return parseAmount(match[1]);
@@ -629,9 +702,11 @@ export function getBankDisplayName(bank: BankType): string {
         case 'HDFC': return 'HDFC Bank';
         case 'ICICI': return 'ICICI Bank';
         case 'SBI': return 'State Bank of India';
+        case 'CANARA': return 'Canara Bank';
         default: return 'Unknown Bank';
     }
 }
+
 
 /**
  * Main function to parse an SMS message
