@@ -366,12 +366,16 @@ export function extractAccountLast4(message: string, bank: BankType): string | n
         }
     }
 
-    if (bank === 'CANARA') {
+    if (bank === "CANARA") {
         // Canara Bank account pattern: A/C XX1234
         match = message.match(CanaraBankPatterns.ACCOUNT_PATTERN);
-        if (match) return match[1];
+        if (match) {
+      // Normalize to last 3 digits to handle both XX8515 (4 digits) and XXX515 (3 digits) formats
+      // Both should be recognized as the same account ending in 515
+      const accountDigits = match[1];
+      return accountDigits.length >= 4 ? accountDigits.slice(-3) : accountDigits;
     }
-
+  }
 
     // Generic patterns
     match = message.match(Patterns.Account.AC_WITH_MASK);
