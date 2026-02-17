@@ -330,7 +330,7 @@ export const SettingsScreen: React.FC = () => {
                         <View style={[styles.statusBanner, { backgroundColor: colors.success + '10' }]}>
                             <Ionicons name="checkmark-circle" size={18} color={colors.success} />
                             <Text style={[styles.statusText, { color: colors.success }]}>
-                                Supported: HDFC, ICICI, SBI
+                                Supported: HDFC, ICICI, SBI, Canara, IOB, Indian Bank
                             </Text>
                         </View>
                         {/* SMS Info Note */}

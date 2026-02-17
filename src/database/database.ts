@@ -1,5 +1,5 @@
 import * as SQLite from 'expo-sqlite';
-import { CREATE_ACCOUNTS_TABLE, CREATE_EXPENSES_TABLE, CREATE_INDEXES } from './schema';
+import { CREATE_ACCOUNTS_TABLE, CREATE_EXPENSES_TABLE, CREATE_INDEXES, CREATE_BUDGETS_TABLE, CREATE_BUDGET_CATEGORIES_TABLE } from './schema';
 
 let db: SQLite.SQLiteDatabase | null = null;
 
@@ -42,6 +42,17 @@ export const initDatabase = async (): Promise<void> => {
     `);
     await database.execAsync('CREATE INDEX IF NOT EXISTS idx_sms_hash ON processed_sms_hashes(hash);');
 
+    // Create budget tables
+    await database.execAsync(CREATE_BUDGETS_TABLE);
+    await database.execAsync(CREATE_BUDGET_CATEGORIES_TABLE);
+
+    // Migration: Add reference_month column to budgets if it doesn't exist
+    try {
+        await database.execAsync('ALTER TABLE budgets ADD COLUMN reference_month TEXT DEFAULT NULL;');
+    } catch {
+        // Column already exists, ignore error
+    }
+
     console.log('Database initialized successfully');
 };
 
@@ -49,6 +60,8 @@ export const clearAllData = async (): Promise<void> => {
     const database = await getDatabase();
 
     // Delete all data from tables (order matters due to foreign keys)
+    await database.execAsync('DELETE FROM budget_categories;');
+    await database.execAsync('DELETE FROM budgets;');
     await database.execAsync('DELETE FROM expenses;');
     await database.execAsync('DELETE FROM accounts;');
     await database.execAsync('DELETE FROM processed_sms_hashes;');
@@ -57,6 +70,8 @@ export const clearAllData = async (): Promise<void> => {
     await database.execAsync("DELETE FROM sqlite_sequence WHERE name='expenses';");
     await database.execAsync("DELETE FROM sqlite_sequence WHERE name='accounts';");
     await database.execAsync("DELETE FROM sqlite_sequence WHERE name='processed_sms_hashes';");
+    await database.execAsync("DELETE FROM sqlite_sequence WHERE name='budgets';");
+    await database.execAsync("DELETE FROM sqlite_sequence WHERE name='budget_categories';");
 
     console.log('All data cleared successfully');
 };

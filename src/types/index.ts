@@ -50,3 +50,31 @@ export interface AccountFormData {
     type: 'bank' | 'card';
     icon: string | null;
 }
+
+// Budget types
+export interface Budget {
+    id: number;
+    title: string;
+    type: 'monthly' | 'yearly' | 'one_time';
+    reference_month: string | null;
+    created_at: string;
+}
+
+export interface BudgetCategory {
+    id: number;
+    budget_id: number;
+    category: string;
+    budget_limit: number;
+}
+
+export interface BudgetCategoryProgress {
+    category: string;
+    budget_limit: number;
+    spent: number;
+}
+
+export interface BudgetFormData {
+    title: string;
+    type: 'monthly' | 'yearly' | 'one_time';
+    categories: { category: string; limit: string }[];
+}
