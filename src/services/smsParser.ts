@@ -4,7 +4,7 @@
  */
 
 // Types for parsed transaction data
-export type BankType = 'HDFC' | 'ICICI' | 'SBI' | 'CANARA' | 'UNKNOWN';
+export type BankType = 'HDFC' | 'ICICI' | 'SBI' | 'CANARA' | 'IOB' | 'INDIANBANK' | 'UNKNOWN';
 
 export type TransactionType = 'EXPENSE' | 'INCOME' | 'CREDIT' | 'TRANSFER' | 'UNKNOWN';
 
@@ -106,6 +106,38 @@ const CanaraBankPatterns = {
     UPI_REF_PATTERN: /UPI\s+Ref\s+(\d+)/i,
 };
 
+// IOB (Indian Overseas Bank) patterns
+const IOBPatterns = {
+    SENDER_IDS: ['IOB', 'IOBCHN'],
+    DLT_PATTERNS: [
+        /^[A-Z]{2}-IOBCHN.*$/,
+        /^[A-Z]{2}-IOB.*$/,
+    ],
+    AMOUNT_CREDITED: /credited\s+by\s+Rs\.?\s*([0-9,]+(?:\.\d{2})?)/i,
+    AMOUNT_DEBITED: /debited\s+by\s+Rs\.?\s*([0-9,]+(?:\.\d{2})?)/i,
+    ACCOUNT_PATTERN: /a\/c\s+no\.\s+[X]*(\d{2,4})/i,
+    UPI_REF_PATTERN: /\(UPI\s+Ref\s+no\s+(\d+)\)/i,
+    UPI_PAYER_PATTERN: /from\s+([^(]+?)(?:\(UPI|$)/i,
+};
+
+// Indian Bank patterns
+const IndianBankPatterns = {
+    SENDER_IDS: ['INDBNK', 'INDIAN', 'INDIANBANK', 'INDIANBK'],
+    DLT_PATTERNS: [
+        /^[A-Z]{2}-INDBNK-S$/,
+        /^[A-Z]{2}-INDBNK-[TPG]$/,
+        /^[A-Z]{2}-INDBNK$/,
+    ],
+    DEBIT_PATTERN: /debited\s+Rs\.?\s*(\d+(?:,\d{3})*(?:\.\d{2})?)/i,
+    CREDIT_PATTERN: /credited\s+Rs\.?\s*(\d+(?:,\d{3})*(?:\.\d{2})?)/i,
+    CREDIT_REVERSE_PATTERN: /Rs\.?\s*(\d+(?:,\d{3})*(?:\.\d{2})?)\s+credited\s+to/i,
+    WITHDRAWN_PATTERN: /withdrawn\s+Rs\.?\s*(\d+(?:,\d{3})*(?:\.\d{2})?)/i,
+    UPI_PAYMENT_PATTERN: /UPI\s+payment\s+of\s+Rs\.?\s*(\d+(?:,\d{3})*(?:\.\d{2})?)/i,
+    ACCOUNT_PATTERN: /A\/c\s+\*(\d{4})/i,
+    UPI_REF_PATTERN: /UPI:(\d+)/i,
+    VPA_PATTERN: /VPA\s+([\w.-]+@[\w]+)/i,
+};
+
 
 /**
  * Generate a hash from the message for duplicate detection
@@ -149,6 +181,18 @@ export function identifyBank(sender: string): BankType {
     // Check Canara Bank
     if (CanaraBankPatterns.SENDER_IDS.some(id => upperSender.includes(id))) {
         return 'CANARA';
+    }
+
+    // Check IOB (Indian Overseas Bank)
+    if (IOBPatterns.SENDER_IDS.some(id => upperSender.includes(id)) ||
+        IOBPatterns.DLT_PATTERNS.some(pattern => pattern.test(upperSender))) {
+        return 'IOB';
+    }
+
+    // Check Indian Bank
+    if (IndianBankPatterns.SENDER_IDS.some(id => upperSender.includes(id)) ||
+        IndianBankPatterns.DLT_PATTERNS.some(pattern => pattern.test(upperSender))) {
+        return 'INDIANBANK';
     }
 
     return 'UNKNOWN';
@@ -245,6 +289,40 @@ export function extractAmount(message: string, bank: BankType): number | null {
         // "debited for Rs xxx.00"
         const debitForPattern = /debited\s+for\s+Rs\.?\s*([0-9,]+(?:\.\d{2})?)/i;
         match = message.match(debitForPattern);
+        if (match) return parseAmount(match[1]);
+    }
+
+    if (bank === 'IOB') {
+        // IOB specific patterns
+        // Pattern: "credited by Rs.906.00"
+        match = message.match(IOBPatterns.AMOUNT_CREDITED);
+        if (match) return parseAmount(match[1]);
+
+        // Pattern: "debited by Rs.906.00"
+        match = message.match(IOBPatterns.AMOUNT_DEBITED);
+        if (match) return parseAmount(match[1]);
+    }
+
+    if (bank === 'INDIANBANK') {
+        // Indian Bank specific patterns
+        // Pattern: "debited Rs. 19000.00"
+        match = message.match(IndianBankPatterns.DEBIT_PATTERN);
+        if (match) return parseAmount(match[1]);
+
+        // Pattern: "credited Rs. 5000.00"
+        match = message.match(IndianBankPatterns.CREDIT_PATTERN);
+        if (match) return parseAmount(match[1]);
+
+        // Pattern: "Rs.589.00 credited to"
+        match = message.match(IndianBankPatterns.CREDIT_REVERSE_PATTERN);
+        if (match) return parseAmount(match[1]);
+
+        // Pattern: "withdrawn Rs. 2000"
+        match = message.match(IndianBankPatterns.WITHDRAWN_PATTERN);
+        if (match) return parseAmount(match[1]);
+
+        // Pattern: "UPI payment of Rs. 500"
+        match = message.match(IndianBankPatterns.UPI_PAYMENT_PATTERN);
         if (match) return parseAmount(match[1]);
     }
 
@@ -707,6 +785,8 @@ export function getBankDisplayName(bank: BankType): string {
         case 'ICICI': return 'ICICI Bank';
         case 'SBI': return 'State Bank of India';
         case 'CANARA': return 'Canara Bank';
+        case 'IOB': return 'Indian Overseas Bank';
+        case 'INDIANBANK': return 'Indian Bank';
         default: return 'Unknown Bank';
     }
 }
