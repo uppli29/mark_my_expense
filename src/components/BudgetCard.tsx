@@ -9,16 +9,18 @@ import { formatCurrency } from '../utils/dateUtils';
 interface Props {
     budget: Budget;
     onPress: () => void;
+    onLongPress?: () => void;
+    refreshKey?: number;
 }
 
-export const BudgetCard: React.FC<Props> = ({ budget, onPress }) => {
+export const BudgetCard: React.FC<Props> = ({ budget, onPress, onLongPress, refreshKey }) => {
     const { colors } = useTheme();
     const [totalLimit, setTotalLimit] = useState(0);
     const [totalSpent, setTotalSpent] = useState(0);
 
     useEffect(() => {
         loadProgress();
-    }, [budget.id]);
+    }, [budget.id, refreshKey]);
 
     const loadProgress = async () => {
         try {
@@ -39,6 +41,7 @@ export const BudgetCard: React.FC<Props> = ({ budget, onPress }) => {
         <TouchableOpacity
             style={[styles.card, { backgroundColor: colors.surface }]}
             onPress={onPress}
+            onLongPress={onLongPress}
             activeOpacity={0.85}
         >
             <View style={styles.headerRow}>

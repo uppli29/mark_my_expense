@@ -20,6 +20,7 @@ export const BudgetScreen: React.FC = () => {
     const { colors } = useTheme();
     const [loading, setLoading] = useState(true);
     const [budgets, setBudgets] = useState<Budget[]>([]);
+    const [refreshKey, setRefreshKey] = useState(0);
 
     // Modal states
     const [showAddBudget, setShowAddBudget] = useState(false);
@@ -42,6 +43,7 @@ export const BudgetScreen: React.FC = () => {
     useFocusEffect(
         useCallback(() => {
             loadBudgets();
+            setRefreshKey((k) => k + 1);
         }, [loadBudgets])
     );
 
@@ -104,6 +106,13 @@ export const BudgetScreen: React.FC = () => {
         setShowAddBudget(true);
     };
 
+    const handleLongPress = async (budget: Budget) => {
+        const limits = await budgetRepository.getCategoryLimits(budget.id);
+        setEditingBudget(budget);
+        setEditingLimits(limits);
+        setShowAddBudget(true);
+    };
+
     if (loading) {
         return (
             <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
@@ -154,6 +163,8 @@ export const BudgetScreen: React.FC = () => {
                             key={budget.id}
                             budget={budget}
                             onPress={() => handleBudgetPress(budget)}
+                            onLongPress={() => handleLongPress(budget)}
+                            refreshKey={refreshKey}
                         />
                     ))}
                     <View style={{ height: 120 }} />
