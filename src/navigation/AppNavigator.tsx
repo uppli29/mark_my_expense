@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { DashboardScreen } from '../screens/DashboardScreen';
 import { ExpensesScreen } from '../screens/ExpensesScreen';
+import { BudgetScreen } from '../screens/BudgetScreen';
 import { AccountsScreen } from '../screens/AccountsScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 
@@ -37,8 +38,11 @@ export const AppNavigator: React.FC = () => {
                         case 'Expenses':
                             iconName = focused ? 'receipt' : 'receipt-outline';
                             break;
+                        case 'Budget':
+                            iconName = focused ? 'pie-chart' : 'pie-chart-outline';
+                            break;
                         case 'Accounts':
-                            iconName = focused ? 'wallet' : 'wallet-outline';
+                            iconName = focused ? 'card' : 'card-outline';
                             break;
                         case 'Settings':
                             iconName = focused ? 'settings' : 'settings-outline';
@@ -53,6 +57,7 @@ export const AppNavigator: React.FC = () => {
         >
             <Tab.Screen name="Dashboard" component={DashboardScreen} />
             <Tab.Screen name="Expenses" component={ExpensesScreen} />
+            <Tab.Screen name="Budget" component={BudgetScreen} />
             <Tab.Screen name="Accounts" component={AccountsScreen} />
             <Tab.Screen name="Settings" component={SettingsScreen} />
         </Tab.Navigator>

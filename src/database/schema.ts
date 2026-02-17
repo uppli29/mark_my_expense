@@ -34,3 +34,22 @@ export const CREATE_INDEXES = `
   CREATE INDEX IF NOT EXISTS id_expense_date_account ON expenses(date, account_id);
   CREATE INDEX IF NOT EXISTS id_expense_date_account_category ON expenses(date, category); 
 `;
+
+export const CREATE_BUDGETS_TABLE = `
+  CREATE TABLE IF NOT EXISTS budgets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    type TEXT CHECK(type IN ('monthly', 'yearly')) NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`;
+
+export const CREATE_BUDGET_CATEGORIES_TABLE = `
+  CREATE TABLE IF NOT EXISTS budget_categories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    budget_id INTEGER NOT NULL,
+    category TEXT NOT NULL,
+    budget_limit REAL NOT NULL,
+    FOREIGN KEY (budget_id) REFERENCES budgets(id) ON DELETE CASCADE
+  );
+`;

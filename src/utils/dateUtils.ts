@@ -52,6 +52,11 @@ export const getStartOfMonth = (): Date => {
     return new Date(now.getFullYear(), now.getMonth(), 1);
 };
 
+export const getStartOfYear = (): Date => {
+    const now = new Date();
+    return new Date(now.getFullYear(), 0, 1);
+};
+
 export const getEndOfMonth = (): Date => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth() + 1, 0);
