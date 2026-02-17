@@ -46,6 +46,13 @@ export const initDatabase = async (): Promise<void> => {
     await database.execAsync(CREATE_BUDGETS_TABLE);
     await database.execAsync(CREATE_BUDGET_CATEGORIES_TABLE);
 
+    // Migration: Add reference_month column to budgets if it doesn't exist
+    try {
+        await database.execAsync('ALTER TABLE budgets ADD COLUMN reference_month TEXT DEFAULT NULL;');
+    } catch {
+        // Column already exists, ignore error
+    }
+
     console.log('Database initialized successfully');
 };
 

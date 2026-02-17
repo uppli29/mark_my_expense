@@ -55,7 +55,8 @@ export interface AccountFormData {
 export interface Budget {
     id: number;
     title: string;
-    type: 'monthly' | 'yearly';
+    type: 'monthly' | 'yearly' | 'one_time';
+    reference_month: string | null;
     created_at: string;
 }
 
@@ -74,6 +75,6 @@ export interface BudgetCategoryProgress {
 
 export interface BudgetFormData {
     title: string;
-    type: 'monthly' | 'yearly';
+    type: 'monthly' | 'yearly' | 'one_time';
     categories: { category: string; limit: string }[];
 }

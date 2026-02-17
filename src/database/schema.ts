@@ -39,7 +39,8 @@ export const CREATE_BUDGETS_TABLE = `
   CREATE TABLE IF NOT EXISTS budgets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
-    type TEXT CHECK(type IN ('monthly', 'yearly')) NOT NULL,
+    type TEXT CHECK(type IN ('monthly', 'yearly', 'one_time')) NOT NULL,
+    reference_month TEXT DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 `;

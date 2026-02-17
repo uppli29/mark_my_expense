@@ -54,7 +54,17 @@ export const BudgetCard: React.FC<Props> = ({ budget, onPress, onLongPress, refr
                     </Text>
                     <View style={[styles.badge, { backgroundColor: colors.primaryLight + '20' }]}>
                         <Text style={[styles.badgeText, { color: colors.primary }]}>
-                            {budget.type === 'monthly' ? 'Monthly' : 'Yearly'}
+                            {budget.type === 'monthly'
+                                ? 'Monthly'
+                                : budget.type === 'yearly'
+                                    ? 'Yearly'
+                                    : budget.reference_month
+                                        ? (() => {
+                                            const [y, m] = budget.reference_month.split('-');
+                                            const d = new Date(parseInt(y), parseInt(m) - 1);
+                                            return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+                                        })()
+                                        : 'One Time'}
                         </Text>
                     </View>
                 </View>

@@ -21,7 +21,7 @@ interface Props {
     onClose: () => void;
     onSubmit: (data: {
         title: string;
-        type: 'monthly' | 'yearly';
+        type: 'monthly' | 'yearly' | 'one_time';
         categories: { category: string; limit: number }[];
     }) => void;
     onDelete?: () => void;
@@ -39,7 +39,7 @@ export const AddBudgetModal: React.FC<Props> = ({
 }) => {
     const { colors } = useTheme();
     const [title, setTitle] = useState('');
-    const [type, setType] = useState<'monthly' | 'yearly'>('monthly');
+    const [type, setType] = useState<'monthly' | 'yearly' | 'one_time'>('monthly');
     const [categoryLimits, setCategoryLimits] = useState<Record<string, string>>({});
 
     useEffect(() => {
@@ -143,40 +143,52 @@ export const AddBudgetModal: React.FC<Props> = ({
                             placeholderTextColor={colors.textMuted}
                         />
 
-                        {/* Type Selector */}
                         <Text style={[styles.label, { color: colors.textSecondary }]}>Type</Text>
                         <View style={styles.typeRow}>
-                            {(['monthly', 'yearly'] as const).map((t) => (
-                                <TouchableOpacity
-                                    key={t}
-                                    style={[
-                                        styles.typeButton,
-                                        {
-                                            backgroundColor:
-                                                type === t ? colors.primary : colors.surfaceVariant,
-                                            borderColor: type === t ? colors.primary : colors.border,
-                                        },
-                                    ]}
-                                    onPress={() => setType(t)}
-                                >
-                                    <Ionicons
-                                        name={t === 'monthly' ? 'calendar-outline' : 'calendar'}
-                                        size={18}
-                                        color={type === t ? '#FFFFFF' : colors.textSecondary}
-                                    />
-                                    <Text
+                            {(['monthly', 'yearly', 'one_time'] as const).map((t) => {
+                                const label = t === 'monthly' ? 'Monthly' : t === 'yearly' ? 'Yearly' : 'One Time';
+                                const icon = t === 'monthly' ? 'calendar-outline' : t === 'yearly' ? 'calendar' : 'time-outline';
+                                return (
+                                    <TouchableOpacity
+                                        key={t}
                                         style={[
-                                            styles.typeText,
+                                            styles.typeButton,
                                             {
-                                                color: type === t ? '#FFFFFF' : colors.textSecondary,
+                                                backgroundColor:
+                                                    type === t ? colors.primary : colors.surfaceVariant,
+                                                borderColor: type === t ? colors.primary : colors.border,
                                             },
                                         ]}
+                                        onPress={() => setType(t)}
                                     >
-                                        {t === 'monthly' ? 'Monthly' : 'Yearly'}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
+                                        <Ionicons
+                                            name={icon as any}
+                                            size={18}
+                                            color={type === t ? '#FFFFFF' : colors.textSecondary}
+                                        />
+                                        <Text
+                                            style={[
+                                                styles.typeText,
+                                                {
+                                                    color: type === t ? '#FFFFFF' : colors.textSecondary,
+                                                },
+                                            ]}
+                                        >
+                                            {label}
+                                        </Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
                         </View>
+
+                        {type === 'one_time' && (
+                            <View style={[styles.infoBox, { backgroundColor: colors.primary + '10', borderColor: colors.primary + '30' }]}>
+                                <Ionicons name="information-circle-outline" size={18} color={colors.primary} />
+                                <Text style={[styles.infoText, { color: colors.textSecondary }]}>
+                                    This budget will only track expenses for the current month and won't roll over to subsequent months.
+                                </Text>
+                            </View>
+                        )}
 
                         {/* Category Limits */}
                         <Text style={[styles.label, { color: colors.textSecondary }]}>
@@ -306,22 +318,39 @@ const styles = StyleSheet.create({
     },
     typeRow: {
         flexDirection: 'row',
-        gap: 12,
-        marginBottom: 24,
+        gap: 8,
+        marginBottom: 16,
+        flexWrap: 'wrap',
     },
     typeButton: {
-        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 14,
+        paddingVertical: 12,
+        paddingHorizontal: 12,
         borderRadius: 12,
         borderWidth: 1,
-        gap: 8,
+        gap: 6,
+        minWidth: '30%',
+        flex: 1,
     },
     typeText: {
-        fontSize: 15,
+        fontSize: 13,
         fontWeight: '600',
+    },
+    infoBox: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        padding: 12,
+        borderRadius: 10,
+        borderWidth: 1,
+        gap: 8,
+        marginBottom: 16,
+    },
+    infoText: {
+        fontSize: 12,
+        lineHeight: 18,
+        flex: 1,
     },
     categoryRow: {
         flexDirection: 'row',

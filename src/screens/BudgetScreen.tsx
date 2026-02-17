@@ -49,24 +49,31 @@ export const BudgetScreen: React.FC = () => {
 
     const handleCreateBudget = async (data: {
         title: string;
-        type: 'monthly' | 'yearly';
+        type: 'monthly' | 'yearly' | 'one_time';
         categories: { category: string; limit: number }[];
     }) => {
-        await budgetRepository.create(data.title, data.type, data.categories);
+        const refMonth = data.type === 'one_time'
+            ? `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+            : undefined;
+        await budgetRepository.create(data.title, data.type, data.categories, refMonth);
         loadBudgets();
     };
 
     const handleUpdateBudget = async (data: {
         title: string;
-        type: 'monthly' | 'yearly';
+        type: 'monthly' | 'yearly' | 'one_time';
         categories: { category: string; limit: number }[];
     }) => {
         if (editingBudget) {
+            const refMonth = data.type === 'one_time'
+                ? (editingBudget.reference_month || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`)
+                : undefined;
             await budgetRepository.update(
                 editingBudget.id,
                 data.title,
                 data.type,
-                data.categories
+                data.categories,
+                refMonth
             );
             // Refresh detail if it's open
             if (selectedBudget && selectedBudget.id === editingBudget.id) {

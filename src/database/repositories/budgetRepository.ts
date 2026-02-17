@@ -2,6 +2,23 @@ import { getDatabase } from '../database';
 import { Budget, BudgetCategory, BudgetCategoryProgress } from '../../types';
 import { toSQLDate, getStartOfMonth, getStartOfYear, getToday } from '../../utils/dateUtils';
 
+// Helper to compute date range for a budget based on its type
+const getDateRange = (budget: Budget): { startDate: string; endDate: string } => {
+    if (budget.type === 'one_time' && budget.reference_month) {
+        // Parse YYYY-MM to get the start and end of that specific month
+        const [year, month] = budget.reference_month.split('-').map(Number);
+        const start = new Date(year, month - 1, 1);
+        const end = new Date(year, month, 0); // last day of that month
+        end.setHours(23, 59, 59, 999);
+        return { startDate: toSQLDate(start), endDate: toSQLDate(end) };
+    }
+    if (budget.type === 'yearly') {
+        return { startDate: toSQLDate(getStartOfYear()), endDate: toSQLDate(getToday()) };
+    }
+    // monthly (default)
+    return { startDate: toSQLDate(getStartOfMonth()), endDate: toSQLDate(getToday()) };
+};
+
 export const budgetRepository = {
     // Get all budgets
     async getAll(): Promise<Budget[]> {
@@ -24,14 +41,15 @@ export const budgetRepository = {
     // Create a new budget with its category limits
     async create(
         title: string,
-        type: 'monthly' | 'yearly',
-        categories: { category: string; limit: number }[]
+        type: 'monthly' | 'yearly' | 'one_time',
+        categories: { category: string; limit: number }[],
+        referenceMonth?: string
     ): Promise<number> {
         const db = await getDatabase();
 
         const result = await db.runAsync(
-            'INSERT INTO budgets (title, type) VALUES (?, ?)',
-            [title, type]
+            'INSERT INTO budgets (title, type, reference_month) VALUES (?, ?, ?)',
+            [title, type, referenceMonth || null]
         );
         const budgetId = result.lastInsertRowId;
 
@@ -49,14 +67,15 @@ export const budgetRepository = {
     async update(
         id: number,
         title: string,
-        type: 'monthly' | 'yearly',
-        categories: { category: string; limit: number }[]
+        type: 'monthly' | 'yearly' | 'one_time',
+        categories: { category: string; limit: number }[],
+        referenceMonth?: string
     ): Promise<void> {
         const db = await getDatabase();
 
         await db.runAsync(
-            'UPDATE budgets SET title = ?, type = ? WHERE id = ?',
-            [title, type, id]
+            'UPDATE budgets SET title = ?, type = ?, reference_month = ? WHERE id = ?',
+            [title, type, referenceMonth || null, id]
         );
 
         // Replace all category limits
@@ -92,17 +111,13 @@ export const budgetRepository = {
     async getProgress(budgetId: number): Promise<BudgetCategoryProgress[]> {
         const db = await getDatabase();
 
-        // Get the budget to determine type
         const budget = await db.getFirstAsync<Budget>(
             'SELECT * FROM budgets WHERE id = ?',
             [budgetId]
         );
         if (!budget) return [];
 
-        const startDate = budget.type === 'monthly'
-            ? toSQLDate(getStartOfMonth())
-            : toSQLDate(getStartOfYear());
-        const endDate = toSQLDate(getToday());
+        const { startDate, endDate } = getDateRange(budget);
 
         const result = await db.getAllAsync<BudgetCategoryProgress>(
             `SELECT 
@@ -133,10 +148,7 @@ export const budgetRepository = {
         );
         if (!budget) return { totalLimit: 0, totalSpent: 0 };
 
-        const startDate = budget.type === 'monthly'
-            ? toSQLDate(getStartOfMonth())
-            : toSQLDate(getStartOfYear());
-        const endDate = toSQLDate(getToday());
+        const { startDate, endDate } = getDateRange(budget);
 
         const result = await db.getFirstAsync<{ totalLimit: number; totalSpent: number }>(
             `SELECT 
