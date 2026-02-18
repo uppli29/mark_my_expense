@@ -13,6 +13,7 @@ import { getDatabase } from '../database/database';
 
 // Storage keys
 const STORAGE_KEY_SCAN_DURATION = '@sms_scan_duration';
+const STORAGE_KEY_LAST_AUTO_SCAN = '@sms_last_auto_scan';
 
 // SMS Permission status
 export interface SMSPermissionStatus {
@@ -379,4 +380,146 @@ export const smsListenerService = {
     scanSMSInbox,
     getScanDuration,
     setScanDuration,
+    scanSMSForToday,
+    autoScanAndNotify,
+    shouldPerformAutoScan,
 };
+
+/**
+ * Scan SMS inbox for today's transaction messages
+ */
+export async function scanSMSForToday(): Promise<SMSScanResult> {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+    if (!isSMSSupported()) {
+        console.log('SMS not supported on this platform');
+        return { processed: 0, skipped: 0, errors: 0 };
+    }
+
+    // Check permissions
+    const permissions = await checkSMSPermissions();
+    if (!permissions.hasReadSmsPermission) {
+        console.log('SMS read permission not granted');
+        return { processed: 0, skipped: 0, errors: 0 };
+    }
+
+    console.log(`Scanning SMS inbox for today: ${new Date(startOfToday).toISOString()}`);
+
+    return new Promise((resolve) => {
+        const filter = {
+            box: 'inbox',
+            minDate: startOfToday,
+        };
+
+        SmsAndroid.list(
+            JSON.stringify(filter),
+            (error: string) => {
+                console.error('Failed to read SMS inbox:', error);
+                resolve({ processed: 0, skipped: 0, errors: 1 });
+            },
+            async (count: number, smsList: string) => {
+                console.log(`Found ${count} SMS messages for today`);
+
+                let processed = 0;
+                let skipped = 0;
+                let errors = 0;
+
+                try {
+                    const messages = JSON.parse(smsList) as Array<{
+                        address: string;
+                        body: string;
+                        date: string;
+                    }>;
+
+                    for (const sms of messages) {
+                        try {
+                            const sender = sms.address || '';
+                            const body = sms.body || '';
+                            const timestamp = parseInt(sms.date, 10) || Date.now();
+
+                            const transaction = parseSMS(sender, body, timestamp);
+                            if (!transaction) continue;
+
+                            const expenseId = await createExpenseFromTransaction(transaction);
+                            if (expenseId) {
+                                processed++;
+                            } else {
+                                skipped++;
+                            }
+                        } catch (smsError) {
+                            console.error('Error processing SMS:', smsError);
+                            errors++;
+                        }
+                    }
+                } catch (parseError) {
+                    console.error('Error parsing SMS list:', parseError);
+                    errors++;
+                }
+
+                resolve({ processed, skipped, errors });
+            }
+        );
+    });
+}
+
+/**
+ * Perform auto-scan and notify user
+ */
+export async function autoScanAndNotify(): Promise<void> {
+    // Import notificationService dynamically to avoid circular dependency
+    const { notificationService } = require('./notificationService');
+
+    const permissions = await checkSMSPermissions();
+
+    if (!permissions.hasReadSmsPermission) {
+        await notificationService.showLocalNotification(
+            '💰 Track Your Expenses',
+            "Don't forget to log today's expenses! Stay on top of your finances."
+        );
+        return;
+    }
+
+    const result = await scanSMSForToday();
+
+    if (result.processed > 0) {
+        await notificationService.showLocalNotification(
+            '✅ Expenses Added Automatically',
+            `Scanned your messages and added ${result.processed} new ${result.processed === 1 ? 'expense' : 'expenses'} for today. Tap to review!`
+        );
+    } else {
+        await notificationService.showLocalNotification(
+            '💰 Track Your Expenses',
+            "Don't forget to log today's expenses! Stay on top of your finances."
+        );
+    }
+
+    // Mark as scanned for today
+    try {
+        await AsyncStorage.setItem(STORAGE_KEY_LAST_AUTO_SCAN, new Date().toDateString());
+    } catch (error) {
+        console.error('Error saving last auto scan date:', error);
+    }
+}
+
+/**
+ * Check if auto-scan should be performed (after 9 PM and not yet scanned today)
+ */
+export async function shouldPerformAutoScan(): Promise<boolean> {
+    try {
+        const now = new Date();
+        const currentHour = now.getHours();
+
+        // Only scan after 9 PM
+        if (currentHour < 21) {
+            return false;
+        }
+
+        const lastScanDate = await AsyncStorage.getItem(STORAGE_KEY_LAST_AUTO_SCAN);
+        const todayStr = now.toDateString();
+
+        return lastScanDate !== todayStr;
+    } catch (error) {
+        return false;
+    }
+}

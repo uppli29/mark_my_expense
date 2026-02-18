@@ -36,8 +36,14 @@ const AppContent: React.FC = () => {
         // Schedule notifications after DB is ready
         await notificationService.scheduleAllNotifications();
 
-         // Initialize SMS service for auto-tracking (Android only)
+        // Initialize SMS service for auto-tracking (Android only)
         await smsListenerService.initSMSService();
+
+        // Check for 9 PM auto-scan trigger as a fallback
+        const shouldScan = await smsListenerService.shouldPerformAutoScan();
+        if (shouldScan) {
+          await smsListenerService.autoScanAndNotify();
+        }
       } catch (error) {
         console.error('App initialization failed:', error);
       }
