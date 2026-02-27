@@ -159,6 +159,22 @@ Manage notifications in Settings → Notifications.
 
 All data is stored locally on your device using SQLite.
 
+## 🤖 Offline Assistant (Optional)
+
+The app includes a local Assistant screen that can answer questions about your expenses without any cloud API calls.
+
+### How It Works
+- A **local model file** (GGUF) can be downloaded or imported to the device.
+- If a local model runtime is installed, the Assistant uses it.
+- If not, the Assistant falls back to offline rule-based insights (still fully on-device).
+
+### Typical Questions
+- "How much did I spend this month?"
+- "Top categories this week?"
+- "Show my recent expenses."
+
+See `INSTALL.md` for setup details.
+
 ## 📄 License
 
 MIT License - See LICENSE file for details.

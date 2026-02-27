@@ -3,6 +3,7 @@
     "name": "Mark My Expense",
     "slug": "expense_tracker_mobile",
     "version": "1.2.0",
+    "scheme": "markmyexpense",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -33,8 +34,7 @@
           "autoVerify": true,
           "data": [
             {
-              "scheme": "markmyexpense",
-              "host": "app"
+              "scheme": "markmyexpense"
             }
           ],
           "category": [

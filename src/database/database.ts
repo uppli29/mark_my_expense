@@ -1,5 +1,5 @@
 import * as SQLite from 'expo-sqlite';
-import { CREATE_ACCOUNTS_TABLE, CREATE_EXPENSES_TABLE, CREATE_INDEXES, CREATE_BUDGETS_TABLE, CREATE_BUDGET_CATEGORIES_TABLE } from './schema';
+import { CREATE_ACCOUNTS_TABLE, CREATE_EXPENSES_TABLE, CREATE_INDEXES, CREATE_BUDGETS_TABLE, CREATE_BUDGET_CATEGORIES_TABLE, CREATE_CHAT_MESSAGES_TABLE } from './schema';
 
 let db: SQLite.SQLiteDatabase | null = null;
 
@@ -46,6 +46,10 @@ export const initDatabase = async (): Promise<void> => {
     await database.execAsync(CREATE_BUDGETS_TABLE);
     await database.execAsync(CREATE_BUDGET_CATEGORIES_TABLE);
 
+    // Create chat messages table
+    await database.execAsync(CREATE_CHAT_MESSAGES_TABLE);
+    await database.execAsync('CREATE INDEX IF NOT EXISTS idx_chat_session ON chat_messages(session_id);');
+
     // Migration: Add reference_month column to budgets if it doesn't exist
     try {
         await database.execAsync('ALTER TABLE budgets ADD COLUMN reference_month TEXT DEFAULT NULL;');
@@ -60,6 +64,7 @@ export const clearAllData = async (): Promise<void> => {
     const database = await getDatabase();
 
     // Delete all data from tables (order matters due to foreign keys)
+    await database.execAsync('DELETE FROM chat_messages;');
     await database.execAsync('DELETE FROM budget_categories;');
     await database.execAsync('DELETE FROM budgets;');
     await database.execAsync('DELETE FROM expenses;');
@@ -72,6 +77,7 @@ export const clearAllData = async (): Promise<void> => {
     await database.execAsync("DELETE FROM sqlite_sequence WHERE name='processed_sms_hashes';");
     await database.execAsync("DELETE FROM sqlite_sequence WHERE name='budgets';");
     await database.execAsync("DELETE FROM sqlite_sequence WHERE name='budget_categories';");
+    await database.execAsync("DELETE FROM sqlite_sequence WHERE name='chat_messages';");
 
     console.log('All data cleared successfully');
 };

@@ -230,4 +230,26 @@ export const expenseRepository = {
 
         return insertedCount;
     },
+
+    // Execute raw SQL query for Agent context
+    async executeRawQuery(query: string): Promise<any[]> {
+        // Sanitize the query to ensure it is strictly a read-only SELECT statement
+        const trimmedQuery = query.trim().toUpperCase();
+        if (!trimmedQuery.startsWith('SELECT')) {
+            throw new Error('Only SELECT queries are allowed.');
+        }
+
+        const forbiddenKeywords = ['DROP', 'DELETE', 'UPDATE', 'INSERT', 'ALTER', 'PRAGMA', 'CREATE', 'REPLACE', 'GRANT', 'REVOKE'];
+        for (const keyword of forbiddenKeywords) {
+            // Check for keyword bounded by word boundaries or at the start/end
+            const regex = new RegExp(`\\b${keyword}\\b`);
+            if (regex.test(trimmedQuery)) {
+                throw new Error(`Forbidden keyword '${keyword}' detected in query.`);
+            }
+        }
+
+        const db = await getDatabase();
+        const result = await db.getAllAsync<any>(query);
+        return result;
+    },
 };

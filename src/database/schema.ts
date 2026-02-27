@@ -54,3 +54,14 @@ export const CREATE_BUDGET_CATEGORIES_TABLE = `
     FOREIGN KEY (budget_id) REFERENCES budgets(id) ON DELETE CASCADE
   );
 `;
+
+export const CREATE_CHAT_MESSAGES_TABLE = `
+  CREATE TABLE IF NOT EXISTS chat_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    role TEXT CHECK(role IN ('user', 'assistant', 'system')) NOT NULL,
+    content TEXT NOT NULL,
+    is_system_prompt INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`;

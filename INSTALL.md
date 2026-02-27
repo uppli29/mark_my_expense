@@ -156,6 +156,36 @@ See [Architecture Guide](./docs/ARCHITECTURE.md) for detailed schema.
 
 ---
 
+## Optional: Offline Assistant (Local LLM)
+
+The Assistant screen supports a fully offline LLM workflow. It never sends data to any cloud API.
+
+### Model Files
+- Use a **GGUF** model file (for example a small Gemma variant).
+- Download the file from a trusted source or import it from local storage.
+- The model file is stored in the app's private documents directory.
+
+### Local Runtime (Native Module)
+To enable real LLM inference on-device, you need a native runtime. The app looks for a `NativeModules.LocalLlm` module with the following methods:
+
+```ts
+loadModel(path: string): Promise<void>
+generate(prompt: string, options?: { maxTokens?: number; temperature?: number }): Promise<string>
+unloadModel?(): Promise<void>
+```
+
+If no native runtime is installed, the Assistant falls back to offline rule-based insights.
+
+### Recommended Approach
+For React Native, a llama.cpp based runtime is commonly used. You can:
+1. Add a local LLM runtime package to your project.
+2. Expose it as `LocalLlm` in `NativeModules`.
+3. Build with EAS or a custom dev client (Expo Go cannot load native modules).
+
+This keeps answers fully offline while using a local model file.
+
+---
+
 ## Notification Permissions
 
 The app requests notification permissions on first launch:
