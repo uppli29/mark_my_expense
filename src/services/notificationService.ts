@@ -143,11 +143,16 @@ export const notificationService = {
     },
     /**
      * Send an immediate test notification
-     * Also triggers the SMS scan logic to verify functionality
      */
     async sendTestNotification(): Promise<void> {
-        const { smsListenerService } = require('./smsListenerService');
-        await smsListenerService.autoScanAndNotify();
+        await Notifications.scheduleNotificationAsync({
+            content: {
+                title: '🎉 Notifications Enabled!',
+                body: "You'll receive daily reminders at 9 PM and weekly summaries on Sundays.",
+                sound: 'default',
+            },
+            trigger: null, // Immediate
+        });
     },
     /**
      * Get weekly spending for notification content
