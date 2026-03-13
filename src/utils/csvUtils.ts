@@ -41,54 +41,96 @@ export const exportToCSV = (expenses: ExpenseWithAccount[]): string => {
  * @throws Error if CSV format is invalid
  */
 export const parseCSV = (csvContent: string): CSVExpenseRow[] => {
-    const lines = csvContent.trim().split('\n');
+    if (!csvContent.trim()) {
+        throw new Error('CSV file is empty');
+    }
 
-    if (lines.length < 2) {
-        throw new Error('CSV file is empty or has no data rows');
+    const rows: CSVExpenseRow[] = [];
+    const result: string[][] = [];
+    let currentRow: string[] = [];
+    let currentField = '';
+    let inQuotes = false;
+    let i = 0;
+
+    while (i < csvContent.length) {
+        const char = csvContent[i];
+        const nextChar = csvContent[i + 1];
+
+        if (char === '"') {
+            if (inQuotes && nextChar === '"') {
+                currentField += '"';
+                i += 2;
+                continue;
+            } else {
+                inQuotes = !inQuotes;
+                i++;
+                continue;
+            }
+        }
+
+        if (!inQuotes) {
+            if (char === ',') {
+                currentRow.push(currentField.trim());
+                currentField = '';
+            } else if (char === '\n' || (char === '\r' && nextChar === '\n')) {
+                currentRow.push(currentField.trim());
+                if (currentRow.length > 0) {
+                    result.push(currentRow);
+                }
+                currentRow = [];
+                currentField = '';
+                if (char === '\r') i++; // Skip \r in \r\n
+            } else {
+                currentField += char;
+            }
+        } else {
+            currentField += char;
+        }
+        i++;
+    }
+
+    // Push the last field/row if any
+    if (currentField || currentRow.length > 0) {
+        currentRow.push(currentField.trim());
+        result.push(currentRow);
+    }
+
+    if (result.length < 2) {
+        throw new Error('CSV file has no data rows');
     }
 
     // Validate header
-    const header = lines[0].toLowerCase().replace(/"/g, '').trim();
+    const header = result[0].map(h => h.toLowerCase().replace(/"/g, '').trim()).join(',');
     const expectedHeader = 'account,category,amount,date,description';
     if (header !== expectedHeader) {
         throw new Error(`Invalid CSV header. Expected: ${expectedHeader}`);
     }
 
-    const rows: CSVExpenseRow[] = [];
+    for (let j = 1; j < result.length; j++) {
+        const row = result[j];
+        if (row.length === 1 && row[0] === '') continue; // Skip empty lines
 
-    for (let i = 1; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (!line) continue;
-
-        try {
-            const row = parseCSVLine(line);
-            if (row.length < 5) {
-                throw new Error(`Line ${i + 1}: Missing columns`);
-            }
-
-            const amount = parseFloat(row[2]);
-            if (isNaN(amount) || amount < 0) {
-                throw new Error(`Line ${i + 1}: Invalid amount "${row[2]}"`);
-            }
-
-            // Validate date format (YYYY-MM-DD)
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(row[3])) {
-                throw new Error(`Line ${i + 1}: Invalid date format "${row[3]}". Expected YYYY-MM-DD`);
-            }
-
-            rows.push({
-                account: row[0],
-                category: row[1],
-                amount,
-                date: row[3],
-                description: row[4] || ''
-            });
-        } catch (error) {
-            if (error instanceof Error) {
-                throw error;
-            }
-            throw new Error(`Line ${i + 1}: Parse error`);
+        if (row.length < 5) {
+            throw new Error(`Line ${j + 1}: Missing columns (Expected 5, got ${row.length})`);
         }
+
+        const amount = parseFloat(row[2]);
+        if (isNaN(amount) || amount < 0) {
+            throw new Error(`Line ${j + 1}: Invalid amount "${row[2]}"`);
+        }
+
+        // Validate date format (YYYY-MM-DD)
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(row[3])) {
+            throw new Error(`Line ${j + 1}: Invalid date format "${row[3]}". Expected YYYY-MM-DD`);
+        }
+
+        rows.push({
+            account: row[0],
+            category: row[1],
+            amount,
+            date: row[3],
+            description: row[4] || ''
+        });
     }
 
     if (rows.length === 0) {
@@ -96,37 +138,6 @@ export const parseCSV = (csvContent: string): CSVExpenseRow[] => {
     }
 
     return rows;
-};
-
-/**
- * Parse a single CSV line handling quoted fields
- */
-const parseCSVLine = (line: string): string[] => {
-    const result: string[] = [];
-    let current = '';
-    let inQuotes = false;
-
-    for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-        const nextChar = line[i + 1];
-
-        if (char === '"') {
-            if (inQuotes && nextChar === '"') {
-                current += '"';
-                i++; // Skip next quote
-            } else {
-                inQuotes = !inQuotes;
-            }
-        } else if (char === ',' && !inQuotes) {
-            result.push(current.trim());
-            current = '';
-        } else {
-            current += char;
-        }
-    }
-    result.push(current.trim());
-
-    return result;
 };
 
 /**

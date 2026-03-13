@@ -25,7 +25,7 @@ export interface SMSSettings {
 }
 
 // SMS Scan Duration type
-export type SMSScanDuration = '3months' | 'thisYear' | 'allTime';
+export type SMSScanDuration = 'today' | '3months' | 'thisYear' | 'allTime';
 
 // Scan result interface
 export interface SMSScanResult {
@@ -192,7 +192,7 @@ async function createExpenseFromTransaction(
 export async function getScanDuration(): Promise<SMSScanDuration> {
     try {
         const value = await AsyncStorage.getItem(STORAGE_KEY_SCAN_DURATION);
-        if (value && ['3months', 'thisYear', 'allTime'].includes(value)) {
+        if (value && ['today', '3months', 'thisYear', 'allTime'].includes(value)) {
             return value as SMSScanDuration;
         }
         return '3months'; // Default
@@ -220,6 +220,10 @@ function calculateScanStartDate(duration: SMSScanDuration): number {
     const now = new Date();
 
     switch (duration) {
+        case 'today':
+            const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            return startOfDay.getTime();
+
         case '3months':
             const threeMonthsAgo = new Date(now);
             threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);

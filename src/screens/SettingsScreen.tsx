@@ -296,8 +296,9 @@ export const SettingsScreen: React.FC = () => {
                             </View>
                             {/* Duration Options */}
                             <View style={styles.durationOptions}>
-                                {(['3months', 'thisYear', 'allTime'] as SMSScanDuration[]).map((option) => {
+                                {(['today', '3months', 'thisYear', 'allTime'] as SMSScanDuration[]).map((option) => {
                                     const labels: Record<SMSScanDuration, string> = {
+                                        'today': 'Today',
                                         '3months': 'Last 3 Months',
                                         'thisYear': 'This Year',
                                         'allTime': 'All Time',
