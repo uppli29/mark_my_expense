@@ -97,6 +97,14 @@ export const expenseRepository = {
         await db.runAsync('DELETE FROM expenses WHERE id = ?', [id]);
     },
 
+    // Delete multiple expenses
+    async deleteMany(ids: number[]): Promise<void> {
+        if (ids.length === 0) return;
+        const db = await getDatabase();
+        const placeholders = ids.map(() => '?').join(',');
+        await db.runAsync(`DELETE FROM expenses WHERE id IN (${placeholders})`, ids);
+    },
+
     // Get category summary for date range
     async getCategorySummary(
         startDate: Date,

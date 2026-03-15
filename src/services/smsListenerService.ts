@@ -301,6 +301,9 @@ export async function scanSMSInbox(): Promise<SMSScanResult> {
                             const body = sms.body || '';
                             const timestamp = parseInt(sms.date, 10) || Date.now();
 
+                            // DEBUG: Log sender for troubleshooting
+                            console.log(`[SMS-DEBUG] Sender: "${sender}", Body preview: "${body.substring(0, 60)}..."`);
+
                             // Parse the SMS
                             const transaction = parseSMS(sender, body, timestamp);
 
@@ -308,6 +311,8 @@ export async function scanSMSInbox(): Promise<SMSScanResult> {
                                 // Not a bank transaction SMS
                                 continue;
                             }
+
+                            console.log(`[SMS-DEBUG] Parsed: bank=${transaction.bank}, amount=${transaction.amount}, type=${transaction.transactionType}`);
 
                             // Try to create expense
                             const expenseId = await createExpenseFromTransaction(transaction);

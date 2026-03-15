@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
     View,
     Text,
@@ -8,6 +8,7 @@ import {
     Alert,
     TouchableOpacity,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import { ThemeToggle } from '../components/ThemeToggle';
@@ -41,6 +42,10 @@ export const ExpensesScreen: React.FC = () => {
     // Modal State
     const [modalVisible, setModalVisible] = useState(false);
     const [selectedExpense, setSelectedExpense] = useState<ExpenseWithAccount | null>(null);
+
+    // Multi-select State
+    const [isSelecting, setIsSelecting] = useState(false);
+    const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
     const loadData = useCallback(async () => {
         try {
@@ -120,10 +125,73 @@ export const ExpensesScreen: React.FC = () => {
         }
     };
 
-    // Filter expenses by category
+    // Swipe single delete — stable ref for memo
+    const handleSwipeDelete = useCallback(async (id: number) => {
+        try {
+            await expenseRepository.delete(id);
+            loadData();
+        } catch (error) {
+            console.error('Failed to delete expense:', error);
+        }
+    }, [loadData]);
+
+    // Multi-select handlers — stable refs for memo
+    const handleLongPress = useCallback((id: number) => {
+        setIsSelecting(true);
+        setSelectedIds(new Set([id]));
+    }, []);
+
+    const handleToggleSelect = useCallback((id: number) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) {
+                next.delete(id);
+            } else {
+                next.add(id);
+            }
+            return next;
+        });
+    }, []);
+
+    const handleCancelSelection = useCallback(() => {
+        setIsSelecting(false);
+        setSelectedIds(new Set());
+    }, []);
+
+    // Filter expenses by category (must be before handleSelectAll)
     const filteredExpenses = selectedCategory
         ? expenses.filter(e => e.category === selectedCategory)
         : expenses;
+
+    const handleSelectAll = useCallback(() => {
+        const allIds = new Set(filteredExpenses.map(e => e.id));
+        setSelectedIds(prev => prev.size === filteredExpenses.length ? new Set() : allIds);
+    }, [filteredExpenses]);
+
+    const handleBulkDelete = useCallback(() => {
+        if (selectedIds.size === 0) return;
+        Alert.alert(
+            'Delete Expenses',
+            `Are you sure you want to delete ${selectedIds.size} expense${selectedIds.size > 1 ? 's' : ''}?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await expenseRepository.deleteMany(Array.from(selectedIds));
+                            handleCancelSelection();
+                            loadData();
+                        } catch (error) {
+                            console.error('Failed to bulk delete:', error);
+                            Alert.alert('Error', 'Failed to delete expenses.');
+                        }
+                    },
+                },
+            ]
+        );
+    }, [selectedIds, handleCancelSelection, loadData]);
 
     const renderHeader = () => (
         <View>
@@ -224,10 +292,33 @@ export const ExpensesScreen: React.FC = () => {
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
             {/* Header */}
-            <View style={[styles.header, { backgroundColor: colors.surface }]}>
-                <Text style={[styles.headerTitle, { color: colors.text }]}>Expenses</Text>
-                <ThemeToggle />
-            </View>
+            {isSelecting ? (
+                <View style={[styles.header, styles.selectionHeader, { backgroundColor: colors.primary }]}> 
+                    <TouchableOpacity onPress={handleCancelSelection} style={styles.selectionAction}>
+                        <Ionicons name="close" size={24} color="#FFFFFF" />
+                    </TouchableOpacity>
+                    <Text style={styles.selectionTitle}>
+                        {selectedIds.size} selected
+                    </Text>
+                    <View style={styles.selectionActions}>
+                        <TouchableOpacity onPress={handleSelectAll} style={styles.selectionAction}>
+                            <Ionicons
+                                name={selectedIds.size === filteredExpenses.length ? 'checkbox' : 'checkbox-outline'}
+                                size={22}
+                                color="#FFFFFF"
+                            />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={handleBulkDelete} style={styles.selectionAction}>
+                            <Ionicons name="trash-outline" size={22} color="#FFFFFF" />
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            ) : (
+                <View style={[styles.header, { backgroundColor: colors.surface }]}>
+                    <Text style={[styles.headerTitle, { color: colors.text }]}>Expenses</Text>
+                    <ThemeToggle />
+                </View>
+            )}
 
             <FlatList
                 data={filteredExpenses}
@@ -236,6 +327,11 @@ export const ExpensesScreen: React.FC = () => {
                     <ExpenseListItem
                         expense={item}
                         onPress={() => handleExpensePress(item)}
+                        onDelete={handleSwipeDelete}
+                        onLongPress={() => handleLongPress(item.id)}
+                        isSelecting={isSelecting}
+                        isSelected={selectedIds.has(item.id)}
+                        onToggleSelect={handleToggleSelect}
                     />
                 )}
                 ListHeaderComponent={renderHeader}
@@ -277,6 +373,27 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.05,
         shadowRadius: 8,
         elevation: 2,
+    },
+    selectionHeader: {
+        shadowOpacity: 0.15,
+        elevation: 4,
+    },
+    selectionTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#FFFFFF',
+    },
+    selectionAction: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    selectionActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
     },
     headerTitle: {
         fontSize: 28,
