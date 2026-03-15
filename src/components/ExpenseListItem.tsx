@@ -60,7 +60,7 @@ const ExpenseListItemInner: React.FC<ExpenseListItemProps> = ({
     useEffect(() => {
         Animated.spring(checkboxAnim, {
             toValue: isSelecting ? 1 : 0,
-            useNativeDriver: true,
+            useNativeDriver: false,
             speed: 20,
             bounciness: 8,
         }).start();
@@ -219,11 +219,16 @@ const ExpenseListItemInner: React.FC<ExpenseListItemProps> = ({
         inputRange: [0, 1],
         outputRange: ['transparent', colors.primary + '12'],
     });
+    const deleteOpacity = translateX.interpolate({
+        inputRange: [-DELETE_BUTTON_WIDTH, -10, 0],
+        outputRange: [1, 1, 0],
+        extrapolate: 'clamp',
+    });
 
     return (
         <View style={styles.outerContainer}>
             {/* Delete button behind */}
-            <View style={styles.deleteBackground}>
+            <Animated.View style={[styles.deleteBackground, { opacity: deleteOpacity }]}>
                 <Pressable
                     style={styles.deleteButton}
                     onPress={handleDeletePress}
@@ -232,11 +237,15 @@ const ExpenseListItemInner: React.FC<ExpenseListItemProps> = ({
                     <Ionicons name="trash-outline" size={22} color="#FFFFFF" />
                     <Text style={styles.deleteText}>Delete</Text>
                 </Pressable>
-            </View>
+            </Animated.View>
 
             {/* Foreground item */}
             <Animated.View
-                style={{ transform: [{ translateX }, { scale: scaleAnim }] }}
+                style={{ 
+                    transform: [{ translateX }, { scale: scaleAnim }], 
+                    backgroundColor: colors.surface,
+                    borderRadius: 14
+                }}
                 {...(isSelecting ? {} : panResponder.panHandlers)}
             >
                 <Pressable
